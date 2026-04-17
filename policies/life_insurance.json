@@ -1,0 +1,20 @@
+{
+  "policy_name": "Life Insurance",
+  "description": "Provides financial protection for beneficiaries in case of death of the insured person.",
+  "coverage": {
+    "death_benefit": "Pays a lump sum to the nominated beneficiaries in case of death.",
+    "accidental_death": "Covers death caused by accidents.",
+    "terminal_illness": "Covers early payout in case of diagnosed terminal illness."
+  },
+  "exclusions": [
+    "Suicide within first 12 months of policy",
+    "Death caused by criminal acts or reckless behavior",
+    "War or terrorism-related deaths"
+  ],
+  "user_responsibilities": [
+    "Provide valid ID and health history",
+    "Provide beneficiary details",
+    "Disclose pre-existing conditions"
+  ],
+  "admin_verification": ["BVN", "NIN", "Medical history verification", "Beneficiary details verification"]
+}

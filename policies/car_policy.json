@@ -1,0 +1,21 @@
+{
+  "policy_name": "Car Insurance",
+  "description": "Covers damages or loss to your car due to accidents, theft, fire, or natural disasters.",
+  "coverage": {
+    "accidents": "Covers collision, impact, and third-party liability.",
+    "theft": "Covers full or partial theft of the car.",
+    "fire": "Covers damages caused by fire, explosions, or lightning.",
+    "natural_disasters": "Covers damages caused by floods, storms, earthquakes, or hail."
+  },
+  "exclusions": [
+    "Intentional damage caused by the owner",
+    "Driving under influence of alcohol/drugs",
+    "Racing or reckless driving"
+  ],
+  "user_responsibilities": [
+    "Provide valid driver’s license and vehicle registration",
+    "Provide recent photos of the car",
+    "Report incidents within 24 hours"
+  ],
+  "admin_verification": ["BVN", "NIN", "car details verification", "incident verification"]
+}

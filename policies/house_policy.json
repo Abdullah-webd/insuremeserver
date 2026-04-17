@@ -1,0 +1,20 @@
+{
+  "policy_name": "House Insurance",
+  "description": "Covers damages or loss to your house and its contents due to accidents, fire, theft, or natural disasters.",
+  "coverage": {
+    "structural_damage": "Covers damages to the building structure from fire, storm, earthquake, or accidental impact.",
+    "contents": "Covers furniture, appliances, electronics inside the house.",
+    "liability": "Covers accidents occurring on the property affecting visitors."
+  },
+  "exclusions": [
+    "Negligence or lack of maintenance",
+    "Damage due to war or civil unrest",
+    "Pest or termite damage"
+  ],
+  "user_responsibilities": [
+    "Provide property documents and ID",
+    "Provide photos of the house and its contents",
+    "Report damages promptly"
+  ],
+  "admin_verification": ["BVN", "NIN", "property verification", "contents verification"]
+}

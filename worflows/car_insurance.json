@@ -1,0 +1,52 @@
+[
+  {
+    "name": "update_field",
+    "description": "Update a workflow field for a user.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "workflow_id": { "type": "string" },
+        "field": { "type": "string" },
+        "value": { "type": "string" }
+      },
+      "required": ["user_id", "workflow_id", "field", "value"]
+    }
+  },
+  {
+    "name": "submit_registration",
+    "description": "Submit collected registration details to the admin dashboard.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "data": { "type": "object" }
+      },
+      "required": ["user_id", "data"]
+    }
+  },
+  {
+    "name": "submit_car_insurance_application",
+    "description": "Submit car insurance application to admin dashboard for review.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "car_data": { "type": "object" }
+      },
+      "required": ["user_id", "car_data"]
+    }
+  },
+  {
+    "name": "submit_claim",
+    "description": "Submit claim details to admin dashboard for review.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "string" },
+        "claim_data": { "type": "object" }
+      },
+      "required": ["user_id", "claim_data"]
+    }
+  }
+]

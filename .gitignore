@@ -1,0 +1,6 @@
+# Runtime audit logs
+data/audit.jsonl
+
+# Node modules
+node_modules/
+.env

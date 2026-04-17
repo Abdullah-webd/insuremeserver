@@ -1,0 +1,20 @@
+{
+  "policy_name": "Health Insurance",
+  "description": "Covers medical expenses for hospitalization, surgeries, and treatments.",
+  "coverage": {
+    "hospitalization": "Covers room charges, surgical procedures, and nursing care.",
+    "outpatient": "Covers consultations, diagnostic tests, and medications.",
+    "critical_illness": "Covers treatment for listed critical illnesses (e.g., cancer, stroke, kidney failure)."
+  },
+  "exclusions": [
+    "Cosmetic surgeries",
+    "Pre-existing conditions without disclosure",
+    "Alternative medicine not listed in coverage"
+  ],
+  "user_responsibilities": [
+    "Provide valid ID and health history",
+    "Provide medical reports when needed",
+    "Report hospital visits promptly"
+  ],
+  "admin_verification": ["BVN", "NIN", "Medical documents verification"]
+}

@@ -1,0 +1,124 @@
+﻿{
+  "workflow_id": "buy_house_insurance",
+  "name": "House Insurance Registration",
+  "description": "Collect property and owner details to register for house insurance.",
+  "policy_ref": "house_policy",
+  "status": "in_progress",
+  "current_step": 0,
+  "steps": [
+    {
+      "id": "policy_ack",
+      "field": "policy_understood",
+      "type": "boolean",
+      "prompt": "Do you understand and accept the House Insurance policy terms?",
+      "required": true
+    },
+    {
+      "id": "full_name",
+      "field": "full_name",
+      "type": "string",
+      "prompt": "What is your full name as it appears on your ID?",
+      "required": true,
+      "validation": { "min_length": 3 }
+    },
+    {
+      "id": "phone",
+      "field": "phone",
+      "type": "string",
+      "prompt": "What is your phone number?",
+      "required": true,
+      "validation": { "format": "phone_ng" }
+    },
+    {
+      "id": "email",
+      "field": "email",
+      "type": "string",
+      "prompt": "What is your email address?",
+      "required": true,
+      "validation": { "format": "email" }
+    },
+    {
+      "id": "bvn",
+      "field": "bvn",
+      "type": "string",
+      "prompt": "Please provide your BVN.",
+      "required": true,
+      "validation": { "format": "bvn" },
+      "verification_required": true,
+      "verification_action": "verify_bvn"
+    },
+    {
+      "id": "nin",
+      "field": "nin",
+      "type": "string",
+      "prompt": "Please provide your NIN.",
+      "required": true,
+      "validation": { "format": "nin" },
+      "verification_required": true,
+      "verification_action": "verify_nin"
+    },
+    {
+      "id": "property_address",
+      "field": "property_address",
+      "type": "string",
+      "prompt": "What is the property address?",
+      "required": true
+    },
+    {
+      "id": "property_type",
+      "field": "property_type",
+      "type": "string",
+      "prompt": "What type of property is it? (e.g., bungalow, duplex, apartment)",
+      "required": true
+    },
+    {
+      "id": "property_value",
+      "field": "property_value",
+      "type": "number",
+      "prompt": "Estimated value of the property (in NGN).",
+      "required": true,
+      "validation": { "min": 1 }
+    },
+    {
+      "id": "property_images",
+      "field": "property_images",
+      "type": "array",
+      "prompt": "Please upload recent images of the property.",
+      "required": true,
+      "validation": { "min_items": 1 },
+      "verification_required": true,
+      "verification_action": "verify_image_openai"
+    },
+    {
+      "id": "evidence",
+      "field": "evidence",
+      "type": "array",
+      "prompt": "Please upload supporting photos or videos.",
+      "required": true,
+      "validation": { "min_items": 1 }
+    }
+  ],
+  "collected_fields": {
+    "policy_understood": null,
+    "full_name": null,
+    "phone": null,
+    "email": null,
+    "bvn": null,
+    "nin": null,
+    "property_address": null,
+    "property_type": null,
+    "property_value": null,
+    "property_images": [],
+    "evidence": []
+  },
+  "verification": {
+    "bvn": { "required": true, "status": "pending", "provider": "format_only" },
+    "nin": { "required": true, "status": "pending", "provider": "format_only" },
+    "property_images": { "required": true, "status": "pending", "provider": "openai_vision" }
+  },
+  "submit": {
+    "ready": false,
+    "function": "submit_house_insurance_application",
+    "payload_field": "house_data"
+  }
+}

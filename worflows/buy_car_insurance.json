@@ -1,0 +1,135 @@
+﻿{
+  "workflow_id": "buy_car_insurance",
+  "name": "Car Insurance Registration",
+  "description": "Collect car and owner details to register for car insurance.",
+  "policy_ref": "car_policy",
+  "status": "in_progress",
+  "current_step": 0,
+  "steps": [
+    {
+      "id": "policy_ack",
+      "field": "policy_understood",
+      "type": "boolean",
+      "prompt": "Do you understand and accept the Car Insurance policy terms?",
+      "required": true
+    },
+    {
+      "id": "full_name",
+      "field": "full_name",
+      "type": "string",
+      "prompt": "What is your full name as it appears on your ID?",
+      "required": true,
+      "validation": { "min_length": 3 }
+    },
+    {
+      "id": "phone",
+      "field": "phone",
+      "type": "string",
+      "prompt": "What is your phone number?",
+      "required": true,
+      "validation": { "format": "phone_ng" }
+    },
+    {
+      "id": "email",
+      "field": "email",
+      "type": "string",
+      "prompt": "What is your email address?",
+      "required": true,
+      "validation": { "format": "email" }
+    },
+    {
+      "id": "bvn",
+      "field": "bvn",
+      "type": "string",
+      "prompt": "Please provide your BVN.",
+      "required": true,
+      "validation": { "format": "bvn" },
+      "verification_required": true,
+      "verification_action": "verify_bvn"
+    },
+    {
+      "id": "nin",
+      "field": "nin",
+      "type": "string",
+      "prompt": "Please provide your NIN.",
+      "required": true,
+      "validation": { "format": "nin" },
+      "verification_required": true,
+      "verification_action": "verify_nin"
+    },
+    {
+      "id": "car_make",
+      "field": "car_make",
+      "type": "string",
+      "prompt": "What is the car make (e.g., Toyota)?",
+      "required": true
+    },
+    {
+      "id": "car_model",
+      "field": "car_model",
+      "type": "string",
+      "prompt": "What is the car model (e.g., Corolla)?",
+      "required": true
+    },
+    {
+      "id": "car_year",
+      "field": "car_year",
+      "type": "string",
+      "prompt": "What is the car year (e.g., 2020)?",
+      "required": true,
+      "validation": { "format": "year" }
+    },
+    {
+      "id": "plate_number",
+      "field": "plate_number",
+      "type": "string",
+      "prompt": "What is your car plate number?",
+      "required": true,
+      "validation": { "format": "plate_ng" },
+      "verification_required": true,
+      "verification_action": "verify_plate"
+    },
+    {
+      "id": "car_image",
+      "field": "car_image",
+      "type": "image",
+      "prompt": "Please upload clear photos of the car (front, back, side).",
+      "required": true,
+      "verification_required": true,
+      "verification_action": "verify_image_openai"
+    },
+    {
+      "id": "evidence",
+      "field": "evidence",
+      "type": "array",
+      "prompt": "Please upload supporting photos or videos.",
+      "required": true,
+      "validation": { "min_items": 1 }
+    }
+  ],
+  "collected_fields": {
+    "policy_understood": null,
+    "full_name": null,
+    "phone": null,
+    "email": null,
+    "bvn": null,
+    "nin": null,
+    "car_make": null,
+    "car_model": null,
+    "car_year": null,
+    "plate_number": null,
+    "car_image": null,
+    "evidence": []
+  },
+  "verification": {
+    "bvn": { "required": true, "status": "pending", "provider": "format_only" },
+    "nin": { "required": true, "status": "pending", "provider": "format_only" },
+    "plate_number": { "required": true, "status": "pending", "provider": "openai_vision" },
+    "car_image": { "required": true, "status": "pending", "provider": "openai_vision" }
+  },
+  "submit": {
+    "ready": false,
+    "function": "submit_car_insurance_application",
+    "payload_field": "car_data"
+  }
+}

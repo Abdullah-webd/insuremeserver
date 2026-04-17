@@ -1,0 +1,52 @@
+﻿{
+  "workflow_id": "registration",
+  "name": "User Registration",
+  "description": "Collect basic user details to create a Heirs Insurance profile.",
+  "status": "in_progress",
+  "current_step": 0,
+  "steps": [
+    {
+      "id": "full_name",
+      "field": "full_name",
+      "type": "string",
+      "prompt": "What is your full name as it appears on your ID?",
+      "required": true,
+      "validation": { "min_length": 3 }
+    },
+    {
+      "id": "email",
+      "field": "email",
+      "type": "string",
+      "prompt": "What is your email address?",
+      "required": true,
+      "validation": { "format": "email" }
+    },
+    {
+      "id": "phone",
+      "field": "phone",
+      "type": "string",
+      "prompt": "What is your phone number?",
+      "required": true,
+      "validation": { "format": "phone_ng" }
+    },
+    {
+      "id": "evidence",
+      "field": "evidence",
+      "type": "array",
+      "prompt": "Please upload supporting photos or videos.",
+      "required": true,
+      "validation": { "min_items": 1 }
+    }
+  ],
+  "collected_fields": {
+    "full_name": null,
+    "email": null,
+    "phone": null,
+    "evidence": []
+  },
+  "submit": {
+    "ready": false,
+    "function": "submit_registration",
+    "payload_field": "data"
+  }
+}

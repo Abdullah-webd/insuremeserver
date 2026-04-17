@@ -1,0 +1,121 @@
+﻿{
+  "workflow_id": "buy_health_insurance",
+  "name": "Health Insurance Registration",
+  "description": "Collect personal and health details to register for health insurance.",
+  "policy_ref": "health_policy",
+  "status": "in_progress",
+  "current_step": 0,
+  "steps": [
+    {
+      "id": "policy_ack",
+      "field": "policy_understood",
+      "type": "boolean",
+      "prompt": "Do you understand and accept the Health Insurance policy terms?",
+      "required": true
+    },
+    {
+      "id": "full_name",
+      "field": "full_name",
+      "type": "string",
+      "prompt": "What is your full name as it appears on your ID?",
+      "required": true,
+      "validation": { "min_length": 3 }
+    },
+    {
+      "id": "phone",
+      "field": "phone",
+      "type": "string",
+      "prompt": "What is your phone number?",
+      "required": true,
+      "validation": { "format": "phone_ng" }
+    },
+    {
+      "id": "email",
+      "field": "email",
+      "type": "string",
+      "prompt": "What is your email address?",
+      "required": true,
+      "validation": { "format": "email" }
+    },
+    {
+      "id": "bvn",
+      "field": "bvn",
+      "type": "string",
+      "prompt": "Please provide your BVN.",
+      "required": true,
+      "validation": { "format": "bvn" },
+      "verification_required": true,
+      "verification_action": "verify_bvn"
+    },
+    {
+      "id": "nin",
+      "field": "nin",
+      "type": "string",
+      "prompt": "Please provide your NIN.",
+      "required": true,
+      "validation": { "format": "nin" },
+      "verification_required": true,
+      "verification_action": "verify_nin"
+    },
+    {
+      "id": "date_of_birth",
+      "field": "date_of_birth",
+      "type": "string",
+      "prompt": "What is your date of birth? (YYYY-MM-DD)",
+      "required": true,
+      "validation": { "format": "date" }
+    },
+    {
+      "id": "pre_existing_conditions",
+      "field": "pre_existing_conditions",
+      "type": "string",
+      "prompt": "Do you have any pre-existing conditions? If none, say 'None'.",
+      "required": true
+    },
+    {
+      "id": "next_of_kin",
+      "field": "next_of_kin",
+      "type": "string",
+      "prompt": "Please provide your next of kin full name.",
+      "required": true
+    },
+    {
+      "id": "next_of_kin_phone",
+      "field": "next_of_kin_phone",
+      "type": "string",
+      "prompt": "Next of kin phone number.",
+      "required": true,
+      "validation": { "format": "phone_ng" }
+    },
+    {
+      "id": "evidence",
+      "field": "evidence",
+      "type": "array",
+      "prompt": "Please upload supporting photos or videos.",
+      "required": true,
+      "validation": { "min_items": 1 }
+    }
+  ],
+  "collected_fields": {
+    "policy_understood": null,
+    "full_name": null,
+    "phone": null,
+    "email": null,
+    "bvn": null,
+    "nin": null,
+    "date_of_birth": null,
+    "pre_existing_conditions": null,
+    "next_of_kin": null,
+    "next_of_kin_phone": null,
+    "evidence": []
+  },
+  "verification": {
+    "bvn": { "required": true, "status": "pending", "provider": "format_only" },
+    "nin": { "required": true, "status": "pending", "provider": "format_only" }
+  },
+  "submit": {
+    "ready": false,
+    "function": "submit_health_insurance_application",
+    "payload_field": "health_data"
+  }
+}
