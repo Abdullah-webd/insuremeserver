@@ -9,9 +9,10 @@ const RequestSchema = new mongoose.Schema(
     title: { type: String, default: null },
     message: { type: String, default: null },
     data: { type: mongoose.Schema.Types.Mixed, default: {} },
-    status: { type: String, default: "open" }
+    status: { type: String, default: "open" },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-export default mongoose.models.Request || mongoose.model("Request", RequestSchema);
+export default mongoose.models.Request ||
+  mongoose.model("Request", RequestSchema);

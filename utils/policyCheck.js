@@ -7,7 +7,7 @@ const POLICY_TYPES = [
   "car_insurance_application",
   "house_insurance_application",
   "health_insurance_application",
-  "life_insurance_application"
+  "life_insurance_application",
 ];
 
 function isActiveRecord(rec) {
@@ -42,7 +42,7 @@ export async function hasActivePolicy(userId) {
     const record = await Submission.findOne({
       userId,
       type: { $in: POLICY_TYPES },
-      $or: [{ status: "paid" }, { paymentStatus: "success" }]
+      $or: [{ status: "paid" }, { paymentStatus: "success" }],
     })
       .select("_id")
       .lean();
@@ -69,8 +69,10 @@ export async function getActivePolicyTypes(userId) {
     const records = await Submission.find({
       userId,
       type: { $in: POLICY_TYPES },
-      $or: [{ status: "paid" }, { paymentStatus: "success" }]
-    }).select("type").lean();
+      $or: [{ status: "paid" }, { paymentStatus: "success" }],
+    })
+      .select("type")
+      .lean();
     const types = new Set();
     for (const r of records) {
       const n = normalize(r.type);
@@ -99,4 +101,3 @@ export async function getActivePolicyTypes(userId) {
   }
   return Array.from(types);
 }
-

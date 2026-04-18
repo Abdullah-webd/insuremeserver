@@ -12,8 +12,8 @@ const functionMap = {
   submit_car_insurance_application,
   submit_house_insurance_application,
   submit_health_insurance_application,
-  submit_life_insurance_application
-  ,request_admin_action
+  submit_life_insurance_application,
+  request_admin_action,
 };
 
 export async function runFunctionByName(name, payload) {

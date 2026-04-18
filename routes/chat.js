@@ -18,7 +18,9 @@ const router = express.Router();
 
 function buildPayload({ userId, message, userState, context, submissions }) {
   const paidPolicies = Array.isArray(submissions)
-    ? submissions.filter((s) => s.status === "paid" || s.paymentStatus === "success")
+    ? submissions.filter(
+        (s) => s.status === "paid" || s.paymentStatus === "success",
+      )
     : [];
 
   return {
@@ -28,7 +30,7 @@ function buildPayload({ userId, message, userState, context, submissions }) {
     user_submissions: submissions || [],
     active_policies: paidPolicies,
     policies: context.policies,
-    workflows: context.workflows
+    workflows: context.workflows,
   };
 }
 
@@ -40,16 +42,16 @@ function mockAIResponse({ userId, message }) {
       workflow_id: "registration",
       current_step: 0,
       collected_fields: { full_name: null, email: null, phone: null },
-      status: "in_progress"
+      status: "in_progress",
     },
-    function_to_call: null
+    function_to_call: null,
   };
 }
 
 function isClaimIntent(message) {
   if (!message) return false;
   return /(claim|file\s+claim|make\s+a\s+claim|submit\s+a\s+claim|insurance\s+claim)/i.test(
-    message
+    message,
   );
 }
 
@@ -73,7 +75,8 @@ router.post("/", async (req, res) => {
 
     // Quick-submit heuristic: if user explicitly asks to submit and we have an in-progress workflow with a submit function, submit now.
     try {
-      const submitKeywords = /\b(submit|submit my claim|submit claim|submit application|please submit|proceed to submit|yes submit|submit now)\b/i;
+      const submitKeywords =
+        /\b(submit|submit my claim|submit claim|submit application|please submit|proceed to submit|yes submit|submit now)\b/i;
       if (userState?.workflow && submitKeywords.test(String(message || ""))) {
         const wf = userState.workflow;
         if (wf && wf.submit && wf.submit.function) {
@@ -82,24 +85,40 @@ router.post("/", async (req, res) => {
             user_id: userId,
             workflow_id: wf.workflow_id,
             verification: wf.verification || {},
-            [payloadField]: wf.collected_fields || {}
+            [payloadField]: wf.collected_fields || {},
           };
-          const fnResult = await runFunctionByName(wf.submit.function, fnPayload);
+          const fnResult = await runFunctionByName(
+            wf.submit.function,
+            fnPayload,
+          );
           // mark workflow submitted and persist
           wf.status = "submitted";
           await setUserState(userId, { workflow: wf });
 
-          const reply = fnResult && fnResult.id
-            ? `Your ${wf.workflow_id || 'request'} has been submitted (id: ${fnResult.id}). Admins will review and contact you.`
-            : `Your ${wf.workflow_id || 'request'} has been submitted. Admins will review and contact you.`;
+          const reply =
+            fnResult && fnResult.id
+              ? `Your ${wf.workflow_id || "request"} has been submitted (id: ${fnResult.id}). Admins will review and contact you.`
+              : `Your ${wf.workflow_id || "request"} has been submitted. Admins will review and contact you.`;
 
-          writeAudit({ at: new Date().toISOString(), userId, message, aiResponse: { reply, function_to_call: { name: wf.submit.function, result: fnResult } } });
+          writeAudit({
+            at: new Date().toISOString(),
+            userId,
+            message,
+            aiResponse: {
+              reply,
+              function_to_call: { name: wf.submit.function, result: fnResult },
+            },
+          });
 
-          return res.json({ reply, workflow: wf, function_to_call: { name: wf.submit.function, result: fnResult } });
+          return res.json({
+            reply,
+            workflow: wf,
+            function_to_call: { name: wf.submit.function, result: fnResult },
+          });
         }
       }
     } catch (e) {
-      console.error('Submit heuristic failed:', e?.message || e);
+      console.error("Submit heuristic failed:", e?.message || e);
     }
 
     if (isClaimIntent(message)) {
@@ -114,14 +133,21 @@ router.post("/", async (req, res) => {
               "You are InsureMe support. Reply in 1-2 sentences, natural and empathetic. " +
               "Explain that there is no active policy on the account, so a claim cannot be filed yet, " +
               "and offer to help start a policy. Do not mention internal checks, databases, or policies.";
-            const aiReply = await callAIMessage({ systemPrompt, userMessage: message });
+            const aiReply = await callAIMessage({
+              systemPrompt,
+              userMessage: message,
+            });
             if (aiReply && aiReply.trim()) reply = aiReply.trim();
           } catch {
             // Fallback to default reply
           }
         }
 
-        return res.json({ reply, workflow: userState?.workflow || null, function_to_call: null });
+        return res.json({
+          reply,
+          workflow: userState?.workflow || null,
+          function_to_call: null,
+        });
       }
 
       // If user only has one active policy, prompt to proceed specifically for that type
@@ -130,7 +156,7 @@ router.post("/", async (req, res) => {
         return res.json({
           reply: `You have an active ${only} policy. I can help you file a claim for that policy — shall I proceed to collect the claim details?`,
           workflow: userState?.workflow || null,
-          function_to_call: null
+          function_to_call: null,
         });
       }
 
@@ -138,7 +164,7 @@ router.post("/", async (req, res) => {
       return res.json({
         reply: `You have active policies for: ${activeTypes.join(", ")}. Which policy would you like to file a claim for? (car, house, health, or life)`,
         workflow: userState?.workflow || null,
-        function_to_call: null
+        function_to_call: null,
       });
     }
 
@@ -147,7 +173,7 @@ router.post("/", async (req, res) => {
       const refusal = handleRefusal({
         message,
         workflow: userState.workflow,
-        userId
+        userId,
       });
       if (refusal) {
         await setUserState(userId, { workflow: refusal.workflow });
@@ -155,7 +181,7 @@ router.post("/", async (req, res) => {
           at: new Date().toISOString(),
           userId,
           message,
-          aiResponse: refusal
+          aiResponse: refusal,
         });
         return res.json(refusal);
       }
@@ -170,30 +196,56 @@ router.post("/", async (req, res) => {
 
     // Heuristic: if user message includes an email and mentions updating/changing contact, create an admin request immediately.
     try {
-      const emailMatch = String(message || "").match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
-      const triggerKeywords = /(update|change|new|replace).*(email|contact)|email.*(update|change|new)|tell.*admin|notify.*admin|contacting me/i;
+      const emailMatch = String(message || "").match(
+        /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
+      );
+      const triggerKeywords =
+        /(update|change|new|replace).*(email|contact)|email.*(update|change|new)|tell.*admin|notify.*admin|contacting me/i;
       if (emailMatch && triggerKeywords.test(message || "")) {
-        const latest = submissions && submissions.length ? submissions[0] : null;
+        const latest =
+          submissions && submissions.length ? submissions[0] : null;
         const submissionId = latest?._id?.toString() || null;
-        const userRec = isMongoConnected() ? await User.findOne({ userId }).lean() : null;
+        const userRec = isMongoConnected()
+          ? await User.findOne({ userId }).lean()
+          : null;
 
         const params = {
           user_id: userId,
-          user_name: userRec?.profile?.full_name || latest?.data?.full_name || null,
+          user_name:
+            userRec?.profile?.full_name || latest?.data?.full_name || null,
           user_phone: userRec?.profile?.phone || latest?.data?.phone || null,
           title: "Update contact email",
           message: String(message || ""),
           type: "contact_update",
-          data: { submissionId, newEmail: emailMatch[0] }
+          data: { submissionId, newEmail: emailMatch[0] },
         };
 
-        const fnResult = await runFunctionByName("request_admin_action", params);
-        writeAudit({ at: new Date().toISOString(), userId, message, aiResponse: { reply: `Created admin request ${fnResult.request?._id || fnResult.request}`, function_to_call: { name: "request_admin_action", parameters: params, result: fnResult } } });
+        const fnResult = await runFunctionByName(
+          "request_admin_action",
+          params,
+        );
+        writeAudit({
+          at: new Date().toISOString(),
+          userId,
+          message,
+          aiResponse: {
+            reply: `Created admin request ${fnResult.request?._id || fnResult.request}`,
+            function_to_call: {
+              name: "request_admin_action",
+              parameters: params,
+              result: fnResult,
+            },
+          },
+        });
 
         return res.json({
           reply: `Request created (id: ${fnResult.request?._id || "unknown"}). Admins will review and contact you.`,
           workflow: userState?.workflow || null,
-          function_to_call: { name: "request_admin_action", parameters: params, result: fnResult }
+          function_to_call: {
+            name: "request_admin_action",
+            parameters: params,
+            result: fnResult,
+          },
         });
       }
     } catch (e) {
@@ -206,7 +258,7 @@ router.post("/", async (req, res) => {
       message,
       userState,
       context,
-      submissions
+      submissions,
     });
 
     const aiResponse =
@@ -259,25 +311,29 @@ router.post("/", async (req, res) => {
       ? submissions.some(
           (s) =>
             (s.status === "paid" || s.paymentStatus === "success") &&
-            s.workflowId === workflow?.workflow_id
+            s.workflowId === workflow?.workflow_id,
         )
       : false;
 
-    if (workflow?.submit?.ready && workflow.submit.function && !hasPaidSubmission) {
+    if (
+      workflow?.submit?.ready &&
+      workflow.submit.function &&
+      !hasPaidSubmission
+    ) {
       const payloadField = workflow.submit.payload_field || "data";
       const fnPayload = {
         user_id: userId,
         workflow_id: workflow.workflow_id,
         verification: workflow.verification || {},
-        [payloadField]: workflow.collected_fields
+        [payloadField]: workflow.collected_fields,
       };
       const fnResult = await runFunctionByName(
         workflow.submit.function,
-        fnPayload
+        fnPayload,
       );
       aiResponse.function_to_call = {
         name: workflow.submit.function,
-        result: fnResult
+        result: fnResult,
       };
       workflow.status = "submitted";
       submittedByBackend = true;
@@ -289,17 +345,16 @@ router.post("/", async (req, res) => {
       workflow.status === "submitted" &&
       !hasPaidSubmission
     ) {
-      const wfDef =
-        workflow.submit?.function
-          ? workflow
-          : context.workflows?.find(
-              (w) => w?.data?.workflow_id === workflow.workflow_id
-            )?.data;
+      const wfDef = workflow.submit?.function
+        ? workflow
+        : context.workflows?.find(
+            (w) => w?.data?.workflow_id === workflow.workflow_id,
+          )?.data;
 
       if (wfDef?.submit?.function) {
         const exists = await submissionExists({
           userId,
-          workflowId: workflow.workflow_id
+          workflowId: workflow.workflow_id,
         });
         if (!exists) {
           const payloadField = wfDef.submit.payload_field || "data";
@@ -307,15 +362,15 @@ router.post("/", async (req, res) => {
             user_id: userId,
             workflow_id: workflow.workflow_id,
             verification: workflow.verification || {},
-            [payloadField]: workflow.collected_fields
+            [payloadField]: workflow.collected_fields,
           };
           const fnResult = await runFunctionByName(
             wfDef.submit.function,
-            fnPayload
+            fnPayload,
           );
           aiResponse.function_to_call = {
             name: wfDef.submit.function,
-            result: fnResult
+            result: fnResult,
           };
         }
       }
@@ -327,16 +382,27 @@ router.post("/", async (req, res) => {
     }
 
     // If the model suggested a backend function to call (function_to_call), execute it here.
-    if (aiResponse.function_to_call && aiResponse.function_to_call.name && !aiResponse.function_to_call.result) {
+    if (
+      aiResponse.function_to_call &&
+      aiResponse.function_to_call.name &&
+      !aiResponse.function_to_call.result
+    ) {
       try {
         const fnName = aiResponse.function_to_call.name;
-        const params = aiResponse.function_to_call.parameters || aiResponse.function_to_call.params || {};
+        const params =
+          aiResponse.function_to_call.parameters ||
+          aiResponse.function_to_call.params ||
+          {};
         const fnResult = await runFunctionByName(fnName, params);
-        aiResponse.function_to_call = { name: fnName, parameters: params, result: fnResult };
+        aiResponse.function_to_call = {
+          name: fnName,
+          parameters: params,
+          result: fnResult,
+        };
       } catch (err) {
         aiResponse.function_to_call = {
           ...aiResponse.function_to_call,
-          error: err?.message || String(err)
+          error: err?.message || String(err),
         };
       }
     }
@@ -345,7 +411,7 @@ router.post("/", async (req, res) => {
       at: new Date().toISOString(),
       userId,
       message,
-      aiResponse
+      aiResponse,
     });
 
     res.json(aiResponse);
@@ -382,9 +448,17 @@ router.get("/history/:userId", async (req, res) => {
           messages.push({ who: "user", text: String(entry.message), time: at });
         }
         if (entry.aiResponse && entry.aiResponse.reply) {
-          messages.push({ who: "bot", text: String(entry.aiResponse.reply), time: at });
+          messages.push({
+            who: "bot",
+            text: String(entry.aiResponse.reply),
+            time: at,
+          });
         }
-        if (entry.aiResponse && entry.aiResponse.function_to_call && entry.aiResponse.function_to_call.name) {
+        if (
+          entry.aiResponse &&
+          entry.aiResponse.function_to_call &&
+          entry.aiResponse.function_to_call.name
+        ) {
           const fn = entry.aiResponse.function_to_call;
           // create a user-friendly summary for known functions to avoid exposing raw JSON
           function summarizeFunction(fn) {
@@ -393,15 +467,24 @@ router.get("/history/:userId", async (req, res) => {
             if (name.startsWith("submit_") && res.id) {
               const amount = res.premium_estimate?.amount;
               const currency = res.premium_estimate?.currency || "";
-              const period = res.premium_estimate?.period ? `/${res.premium_estimate.period}` : "";
-              const parts = [`Submitted ${name.replace("submit_", "").replace(/_/g, " ")}`];
+              const period = res.premium_estimate?.period
+                ? `/${res.premium_estimate.period}`
+                : "";
+              const parts = [
+                `Submitted ${name.replace("submit_", "").replace(/_/g, " ")}`,
+              ];
               parts.push(`id: ${res.id}`);
-              if (amount) parts.push(`Estimated premium: ${amount} ${currency}${period}`);
+              if (amount)
+                parts.push(`Estimated premium: ${amount} ${currency}${period}`);
               return parts.join(" — ");
             }
             if (name === "request_admin_action" && res.request) {
-              const rid = res.request._id || (typeof res.request === "string" ? res.request : null);
-              return rid ? `Request created (id: ${rid}). Admins will review and contact you.` : `Request created. Admins will review and contact you.`;
+              const rid =
+                res.request._id ||
+                (typeof res.request === "string" ? res.request : null);
+              return rid
+                ? `Request created (id: ${rid}). Admins will review and contact you.`
+                : `Request created. Admins will review and contact you.`;
             }
             // generic safe summary
             if (res?.ok) return `${name} completed successfully.`;
@@ -425,4 +508,3 @@ router.get("/history/:userId", async (req, res) => {
     res.status(500).json({ error: err.message || String(err) });
   }
 });
-

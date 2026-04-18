@@ -14,7 +14,7 @@ export default async function request_admin_action(payload = {}) {
     type: payload.type || "general",
     title: payload.title || payload.subject || "User request",
     message: payload.message || payload.body || null,
-    data: payload.data || {}
+    data: payload.data || {},
   });
 
   await req.save();
@@ -27,7 +27,12 @@ export default async function request_admin_action(payload = {}) {
       <p>Title: ${req.title}</p>
       <p>Message: ${req.message || "(no message)"}</p>`;
     try {
-      await sendEmail({ to: adminEmail, subject, html, text: `${req.message || ""}` });
+      await sendEmail({
+        to: adminEmail,
+        subject,
+        html,
+        text: `${req.message || ""}`,
+      });
     } catch (e) {
       // ignore email errors
     }
