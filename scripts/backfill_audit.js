@@ -23,17 +23,33 @@ async function main() {
   }
 
   const raw = fs.readFileSync(auditPath, "utf8");
-  const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   console.log(`Found ${lines.length} audit lines`);
 
   let inserted = 0;
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
-      const at = entry.at ? new Date(entry.at) : entry.timestamp ? new Date(entry.timestamp) : new Date();
+      const at = entry.at
+        ? new Date(entry.at)
+        : entry.timestamp
+          ? new Date(entry.timestamp)
+          : new Date();
       const filter = { userId: entry.userId, at };
-      const doc = { userId: entry.userId, at, message: entry.message || null, aiResponse: entry.aiResponse || null };
-      const res = await Audit.updateOne(filter, { $setOnInsert: doc }, { upsert: true });
+      const doc = {
+        userId: entry.userId,
+        at,
+        message: entry.message || null,
+        aiResponse: entry.aiResponse || null,
+      };
+      const res = await Audit.updateOne(
+        filter,
+        { $setOnInsert: doc },
+        { upsert: true },
+      );
       // upsertedCount isn't always present; check modifiedCount/ack
       if (res.upsertedCount || res.upsertedId) inserted += 1;
     } catch (err) {
