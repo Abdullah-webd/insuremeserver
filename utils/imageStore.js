@@ -1,4 +1,13 @@
 ﻿import crypto from "crypto";
+import { v2 as cloudinary } from "cloudinary";
+
+// Configure Cloudinary SDK from environment variables (supports existing env names)
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || process.env.CLOUDINARY_CLOUD,
+  api_key: process.env.CLOUDINARY_API_KEY || process.env.CLOUDINARY_KEY,
+  api_secret:
+    process.env.CLOUDINARY_API_SECRET || process.env.CLOUDINARY_SECRET,
+});
 
 function isCloudinaryUrl(url) {
   return typeof url === "string" && url.includes("res.cloudinary.com/");
@@ -7,7 +16,11 @@ function isCloudinaryUrl(url) {
 function shouldUpload(url) {
   if (!url || typeof url !== "string") return false;
   if (isCloudinaryUrl(url)) return false;
-  return url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:");
+  return (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("data:")
+  );
 }
 
 function signParams(params, apiSecret) {
@@ -15,7 +28,10 @@ function signParams(params, apiSecret) {
     .sort()
     .map((k) => `${k}=${params[k]}`)
     .join("&");
-  return crypto.createHash("sha1").update(toSign + apiSecret).digest("hex");
+  return crypto
+    .createHash("sha1")
+    .update(toSign + apiSecret)
+    .digest("hex");
 }
 
 async function uploadToCloudinary(fileUrl, { folder }) {
@@ -60,7 +76,7 @@ async function uploadToCloudinary(fileUrl, { folder }) {
     }
 
     throw new Error(
-      "Cloudinary config missing: set CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET or CLOUDINARY_UPLOAD_PRESET"
+      "Cloudinary config missing: set CLOUDINARY_API_KEY/CLOUDINARY_API_SECRET or CLOUDINARY_UPLOAD_PRESET",
     );
   };
 
@@ -69,8 +85,30 @@ async function uploadToCloudinary(fileUrl, { folder }) {
     const form = await doUpload(args);
     // Choose the upload endpoint based on file type (use raw for PDFs).
     const fileUrlStr = String(fileUrl || "").toLowerCase();
-    const useRaw = fileUrlStr.endsWith(".pdf") || (args && args.forceRaw === true);
-    const endpoint = useRaw ? `${endpointBase}/raw/upload` : `${endpointBase}/auto/upload`;
+    const useRaw =
+      fileUrlStr.endsWith(".pdf") || (args && args.forceRaw === true);
+
+    // If we need raw (PDF) and the SDK is configured, prefer SDK upload (ensures resource_type=raw)
+    if (useRaw) {
+      try {
+        const opts = { resource_type: "raw" };
+        if (folder) opts.folder = folder;
+        // Ensure public access
+        opts.access_mode = "public";
+
+        // If signed credentials are provided, the SDK will use them from cloudinary.config
+        const result = await cloudinary.uploader.upload(fileUrl, opts);
+        return result;
+      } catch (err) {
+        // fall through to form POST approach if SDK upload fails
+        // convert error to string so callers can inspect
+        // continue to try the form upload below
+      }
+    }
+
+    const endpoint = useRaw
+      ? `${endpointBase}/raw/upload`
+      : `${endpointBase}/auto/upload`;
     const res = await fetch(endpoint, { method: "POST", body: form });
     if (!res.ok) {
       const errText = await res.text();
@@ -82,7 +120,11 @@ async function uploadToCloudinary(fileUrl, { folder }) {
   // Try signed upload first if credentials are provided (works even if preset is signed-only).
   if (apiKey && apiSecret) {
     try {
-      return await tryOnce({ key: apiKey, secret: apiSecret, preset: uploadPreset });
+      return await tryOnce({
+        key: apiKey,
+        secret: apiSecret,
+        preset: uploadPreset,
+      });
     } catch (err) {
       lastErr = err;
 
@@ -96,7 +138,11 @@ async function uploadToCloudinary(fileUrl, { folder }) {
         /^\d+$/.test(apiSecret.trim());
       if (looksSwapped && /invalid api key/i.test(msg)) {
         try {
-          return await tryOnce({ key: apiSecret, secret: apiKey, preset: uploadPreset });
+          return await tryOnce({
+            key: apiSecret,
+            secret: apiKey,
+            preset: uploadPreset,
+          });
         } catch (err2) {
           lastErr = err2;
         }
@@ -138,17 +184,23 @@ export async function ensureImagesStored(workflow) {
   const folder = `insureme/${workflow.workflow_id || "workflow"}`;
 
   if (fields.car_image) {
-    const urls = Array.isArray(fields.car_image) ? fields.car_image : [fields.car_image];
+    const urls = Array.isArray(fields.car_image)
+      ? fields.car_image
+      : [fields.car_image];
     const uploaded = await uploadList(urls, { folder });
     fields.car_image = uploaded.length === 1 ? uploaded[0] : uploaded;
   }
 
   if (fields.property_images && Array.isArray(fields.property_images)) {
-    fields.property_images = await uploadList(fields.property_images, { folder });
+    fields.property_images = await uploadList(fields.property_images, {
+      folder,
+    });
   }
 
   if (fields.evidence && Array.isArray(fields.evidence)) {
-    fields.evidence = await uploadList(fields.evidence, { folder: `${folder}/claims` });
+    fields.evidence = await uploadList(fields.evidence, {
+      folder: `${folder}/claims`,
+    });
   }
 
   return workflow;
@@ -158,7 +210,9 @@ export async function uploadImagesInData({ data, folder }) {
   if (!data) return data;
 
   if (data.car_image) {
-    const urls = Array.isArray(data.car_image) ? data.car_image : [data.car_image];
+    const urls = Array.isArray(data.car_image)
+      ? data.car_image
+      : [data.car_image];
     const uploaded = await uploadList(urls, { folder });
     data.car_image = uploaded.length === 1 ? uploaded[0] : uploaded;
   }
@@ -168,7 +222,9 @@ export async function uploadImagesInData({ data, folder }) {
   }
 
   if (data.evidence && Array.isArray(data.evidence)) {
-    data.evidence = await uploadList(data.evidence, { folder: `${folder}/claims` });
+    data.evidence = await uploadList(data.evidence, {
+      folder: `${folder}/claims`,
+    });
   }
 
   return data;

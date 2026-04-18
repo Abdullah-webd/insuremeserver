@@ -11,7 +11,8 @@ import { ensureImagesStored } from "../utils/imageStore.js";
 import { handleRefusal } from "../utils/refusalHandler.js";
 import { isMongoConnected } from "../utils/db.js";
 import Submission from "../models/Submission.js";
-import { hasActivePolicy } from "../utils/policyCheck.js";
+import User from "../models/User.js";
+import { hasActivePolicy, getActivePolicyTypes } from "../utils/policyCheck.js";
 
 const router = express.Router();
 
@@ -70,9 +71,40 @@ router.post("/", async (req, res) => {
   try {
     const userState = await getUserState(userId);
 
+    // Quick-submit heuristic: if user explicitly asks to submit and we have an in-progress workflow with a submit function, submit now.
+    try {
+      const submitKeywords = /\b(submit|submit my claim|submit claim|submit application|please submit|proceed to submit|yes submit|submit now)\b/i;
+      if (userState?.workflow && submitKeywords.test(String(message || ""))) {
+        const wf = userState.workflow;
+        if (wf && wf.submit && wf.submit.function) {
+          const payloadField = wf.submit.payload_field || "data";
+          const fnPayload = {
+            user_id: userId,
+            workflow_id: wf.workflow_id,
+            verification: wf.verification || {},
+            [payloadField]: wf.collected_fields || {}
+          };
+          const fnResult = await runFunctionByName(wf.submit.function, fnPayload);
+          // mark workflow submitted and persist
+          wf.status = "submitted";
+          await setUserState(userId, { workflow: wf });
+
+          const reply = fnResult && fnResult.id
+            ? `Your ${wf.workflow_id || 'request'} has been submitted (id: ${fnResult.id}). Admins will review and contact you.`
+            : `Your ${wf.workflow_id || 'request'} has been submitted. Admins will review and contact you.`;
+
+          writeAudit({ at: new Date().toISOString(), userId, message, aiResponse: { reply, function_to_call: { name: wf.submit.function, result: fnResult } } });
+
+          return res.json({ reply, workflow: wf, function_to_call: { name: wf.submit.function, result: fnResult } });
+        }
+      }
+    } catch (e) {
+      console.error('Submit heuristic failed:', e?.message || e);
+    }
+
     if (isClaimIntent(message)) {
-      const active = await hasActivePolicy(userId);
-      if (!active) {
+      const activeTypes = await getActivePolicyTypes(userId);
+      if (!activeTypes || activeTypes.length === 0) {
         let reply =
           "I can’t file a claim yet because there’s no active policy on your account. If you want, I can help you start a policy first.";
 
@@ -82,22 +114,32 @@ router.post("/", async (req, res) => {
               "You are InsureMe support. Reply in 1-2 sentences, natural and empathetic. " +
               "Explain that there is no active policy on the account, so a claim cannot be filed yet, " +
               "and offer to help start a policy. Do not mention internal checks, databases, or policies.";
-            const aiReply = await callAIMessage({
-              systemPrompt,
-              userMessage: message
-            });
+            const aiReply = await callAIMessage({ systemPrompt, userMessage: message });
             if (aiReply && aiReply.trim()) reply = aiReply.trim();
           } catch {
             // Fallback to default reply
           }
         }
 
+        return res.json({ reply, workflow: userState?.workflow || null, function_to_call: null });
+      }
+
+      // If user only has one active policy, prompt to proceed specifically for that type
+      if (activeTypes.length === 1) {
+        const only = activeTypes[0];
         return res.json({
-          reply,
+          reply: `You have an active ${only} policy. I can help you file a claim for that policy — shall I proceed to collect the claim details?`,
           workflow: userState?.workflow || null,
           function_to_call: null
         });
       }
+
+      // Multiple active policies: ask which one
+      return res.json({
+        reply: `You have active policies for: ${activeTypes.join(", ")}. Which policy would you like to file a claim for? (car, house, health, or life)`,
+        workflow: userState?.workflow || null,
+        function_to_call: null
+      });
     }
 
     const context = loadContext();
@@ -124,6 +166,39 @@ router.post("/", async (req, res) => {
       submissions = await Submission.find({ userId })
         .sort({ createdAt: -1 })
         .lean();
+    }
+
+    // Heuristic: if user message includes an email and mentions updating/changing contact, create an admin request immediately.
+    try {
+      const emailMatch = String(message || "").match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/);
+      const triggerKeywords = /(update|change|new|replace).*(email|contact)|email.*(update|change|new)|tell.*admin|notify.*admin|contacting me/i;
+      if (emailMatch && triggerKeywords.test(message || "")) {
+        const latest = submissions && submissions.length ? submissions[0] : null;
+        const submissionId = latest?._id?.toString() || null;
+        const userRec = isMongoConnected() ? await User.findOne({ userId }).lean() : null;
+
+        const params = {
+          user_id: userId,
+          user_name: userRec?.profile?.full_name || latest?.data?.full_name || null,
+          user_phone: userRec?.profile?.phone || latest?.data?.phone || null,
+          title: "Update contact email",
+          message: String(message || ""),
+          type: "contact_update",
+          data: { submissionId, newEmail: emailMatch[0] }
+        };
+
+        const fnResult = await runFunctionByName("request_admin_action", params);
+        writeAudit({ at: new Date().toISOString(), userId, message, aiResponse: { reply: `Created admin request ${fnResult.request?._id || fnResult.request}`, function_to_call: { name: "request_admin_action", parameters: params, result: fnResult } } });
+
+        return res.json({
+          reply: `Request created (id: ${fnResult.request?._id || "unknown"}). Admins will review and contact you.`,
+          workflow: userState?.workflow || null,
+          function_to_call: { name: "request_admin_action", parameters: params, result: fnResult }
+        });
+      }
+    } catch (e) {
+      // don't block the main flow on heuristic errors
+      console.error("Request heuristic failed:", e?.message || e);
     }
 
     const payload = buildPayload({
@@ -251,6 +326,21 @@ router.post("/", async (req, res) => {
       aiResponse.workflow = workflow;
     }
 
+    // If the model suggested a backend function to call (function_to_call), execute it here.
+    if (aiResponse.function_to_call && aiResponse.function_to_call.name && !aiResponse.function_to_call.result) {
+      try {
+        const fnName = aiResponse.function_to_call.name;
+        const params = aiResponse.function_to_call.parameters || aiResponse.function_to_call.params || {};
+        const fnResult = await runFunctionByName(fnName, params);
+        aiResponse.function_to_call = { name: fnName, parameters: params, result: fnResult };
+      } catch (err) {
+        aiResponse.function_to_call = {
+          ...aiResponse.function_to_call,
+          error: err?.message || String(err)
+        };
+      }
+    }
+
     writeAudit({
       at: new Date().toISOString(),
       userId,
@@ -265,3 +355,74 @@ router.post("/", async (req, res) => {
 });
 
 export default router;
+
+// Chat history endpoint (reads audit log)
+router.get("/history/:userId", async (req, res) => {
+  const { userId } = req.params;
+  const fs = await import("fs");
+  const path = await import("path");
+  const ROOT = process.cwd();
+  const auditPath = path.join(ROOT, "data", "audit.jsonl");
+
+  try {
+    if (!fs.existsSync(auditPath)) return res.json({ messages: [] });
+    const raw = fs.readFileSync(auditPath, "utf8");
+    const lines = raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const messages = [];
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.userId !== userId) continue;
+        const at = entry.at || entry.timestamp || new Date().toISOString();
+        if (entry.message !== undefined) {
+          messages.push({ who: "user", text: String(entry.message), time: at });
+        }
+        if (entry.aiResponse && entry.aiResponse.reply) {
+          messages.push({ who: "bot", text: String(entry.aiResponse.reply), time: at });
+        }
+        if (entry.aiResponse && entry.aiResponse.function_to_call && entry.aiResponse.function_to_call.name) {
+          const fn = entry.aiResponse.function_to_call;
+          // create a user-friendly summary for known functions to avoid exposing raw JSON
+          function summarizeFunction(fn) {
+            const name = fn.name || "function";
+            const res = fn.result || {};
+            if (name.startsWith("submit_") && res.id) {
+              const amount = res.premium_estimate?.amount;
+              const currency = res.premium_estimate?.currency || "";
+              const period = res.premium_estimate?.period ? `/${res.premium_estimate.period}` : "";
+              const parts = [`Submitted ${name.replace("submit_", "").replace(/_/g, " ")}`];
+              parts.push(`id: ${res.id}`);
+              if (amount) parts.push(`Estimated premium: ${amount} ${currency}${period}`);
+              return parts.join(" — ");
+            }
+            if (name === "request_admin_action" && res.request) {
+              const rid = res.request._id || (typeof res.request === "string" ? res.request : null);
+              return rid ? `Request created (id: ${rid}). Admins will review and contact you.` : `Request created. Admins will review and contact you.`;
+            }
+            // generic safe summary
+            if (res?.ok) return `${name} completed successfully.`;
+            if (res?.error) return `${name} failed: ${res.error}`;
+            return `${name} ran.`;
+          }
+
+          const summary = summarizeFunction(fn);
+          messages.push({ who: "bot", text: summary, time: at });
+        }
+      } catch (e) {
+        // ignore parse errors per-line
+        continue;
+      }
+    }
+
+    // sort by time
+    messages.sort((a, b) => new Date(a.time) - new Date(b.time));
+    res.json({ messages });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+

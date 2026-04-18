@@ -1,4 +1,5 @@
 ﻿import express from "express";
+import mongoose from "mongoose";
 import Submission from "../models/Submission.js";
 import User from "../models/User.js";
 import { isMongoConnected } from "../utils/db.js";
@@ -7,8 +8,17 @@ import { sendEmail } from "../utils/emailer.js";
 import { buildApprovalEmail } from "../utils/emailTemplates.js";
 import { uploadImagesInData } from "../utils/imageStore.js";
 import { clearUserState } from "../utils/userStateStore.js";
+import Request from "../models/Request.js";
 
 const router = express.Router();
+
+async function fetchSubmissionByIdOrUserId(id, lean = false) {
+  if (!id) return null;
+  if (mongoose.Types.ObjectId.isValid(String(id))) {
+    return lean ? Submission.findById(id).lean() : Submission.findById(id);
+  }
+  return lean ? Submission.findOne({ userId: id }).lean() : Submission.findOne({ userId: id });
+}
 
 function validateIdentityField({ field, value }) {
   const v = String(value ?? "").trim();
@@ -68,7 +78,7 @@ router.post("/submissions/:id/verify-field", async (req, res) => {
     return res.status(503).json({ error: "MongoDB not connected" });
   }
 
-  const submission = await Submission.findById(req.params.id);
+  const submission = await fetchSubmissionByIdOrUserId(req.params.id);
   if (!submission) return res.status(404).json({ error: "Submission not found" });
 
   if (submission.status === "approved" || submission.status === "paid") {
@@ -125,7 +135,7 @@ router.get("/submissions/:id", async (req, res) => {
     return res.status(503).json({ error: "MongoDB not connected" });
   }
 
-  const submission = await Submission.findById(req.params.id).lean();
+  const submission = await fetchSubmissionByIdOrUserId(req.params.id, true);
   if (!submission) return res.status(404).json({ error: "Submission not found" });
 
   res.json({ submission });
@@ -154,6 +164,40 @@ router.get("/users", async (req, res) => {
     .lean();
 
   res.json({ items });
+});
+
+// Requests endpoints for admin
+router.get("/requests", async (req, res) => {
+  if (!isMongoConnected()) return res.status(503).json({ error: "MongoDB not connected" });
+  const { limit = 50, skip = 0 } = req.query;
+  const items = await Request.find({})
+    .sort({ createdAt: -1 })
+    .skip(Number(skip))
+    .limit(Number(limit))
+    .lean();
+  res.json({ items });
+});
+
+router.get("/requests/:id", async (req, res) => {
+  if (!isMongoConnected()) return res.status(503).json({ error: "MongoDB not connected" });
+  const request = await Request.findById(req.params.id).lean();
+  if (!request) return res.status(404).json({ error: "Request not found" });
+  res.json({ request });
+});
+
+router.post("/requests/:id/send-email", async (req, res) => {
+  if (!isMongoConnected()) return res.status(503).json({ error: "MongoDB not connected" });
+  const request = await Request.findById(req.params.id);
+  if (!request) return res.status(404).json({ error: "Request not found" });
+
+  const { subject, html, text } = req.body || {};
+  // Prefer user profile email if available
+  const user = await User.findOne({ userId: request.userId }).lean();
+  const to = user?.profile?.email || req.body?.to || null;
+  if (!to) return res.status(400).json({ error: "No recipient email available" });
+
+  await sendEmail({ to, subject: subject || `Response to your request: ${request.title}`, html, text });
+  res.json({ ok: true });
 });
 
 router.patch("/users/:userId/profile", async (req, res) => {
@@ -318,7 +362,7 @@ router.post("/submissions/:id/approve", async (req, res) => {
     return res.status(503).json({ error: "MongoDB not connected" });
   }
 
-  const submission = await Submission.findById(req.params.id);
+  const submission = await fetchSubmissionByIdOrUserId(req.params.id);
   if (!submission) return res.status(404).json({ error: "Submission not found" });
 
   const user = await User.findOne({ userId: submission.userId }).lean();
@@ -385,7 +429,7 @@ router.post("/submissions/:id/verify-payment", async (req, res) => {
     return res.status(503).json({ error: "MongoDB not connected" });
   }
 
-  const submission = await Submission.findById(req.params.id);
+  const submission = await fetchSubmissionByIdOrUserId(req.params.id);
   if (!submission) return res.status(404).json({ error: "Submission not found" });
 
   if (!submission.paymentReference) {

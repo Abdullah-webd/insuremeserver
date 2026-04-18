@@ -52,3 +52,51 @@ export async function hasActivePolicy(userId) {
   return findActiveInJsonl(userId);
 }
 
+export async function getActivePolicyTypes(userId) {
+  if (!userId) return [];
+
+  const normalize = (t) => {
+    if (!t) return null;
+    const lower = String(t).toLowerCase();
+    if (lower.includes("car")) return "car";
+    if (lower.includes("house") || lower.includes("home")) return "house";
+    if (lower.includes("health")) return "health";
+    if (lower.includes("life")) return "life";
+    return null;
+  };
+
+  if (isMongoConnected()) {
+    const records = await Submission.find({
+      userId,
+      type: { $in: POLICY_TYPES },
+      $or: [{ status: "paid" }, { paymentStatus: "success" }]
+    }).select("type").lean();
+    const types = new Set();
+    for (const r of records) {
+      const n = normalize(r.type);
+      if (n) types.add(n);
+    }
+    return Array.from(types);
+  }
+
+  // fallback to scanning jsonl
+  const filePath = path.join(process.cwd(), "data", "submissions.jsonl");
+  if (!fs.existsSync(filePath)) return [];
+  const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean);
+  const types = new Set();
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const rec = JSON.parse(lines[i]);
+      const recUser = rec.userId || rec.user_id;
+      if (recUser !== userId) continue;
+      if (!POLICY_TYPES.includes(rec.type)) continue;
+      if (!isActiveRecord(rec)) continue;
+      const n = normalize(rec.type);
+      if (n) types.add(n);
+    } catch {
+      // ignore
+    }
+  }
+  return Array.from(types);
+}
+
