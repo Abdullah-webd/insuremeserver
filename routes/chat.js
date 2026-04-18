@@ -16,13 +16,45 @@ import { handleRefusal } from "../utils/refusalHandler.js";
 import { isMongoConnected } from "../utils/db.js";
 import Submission from "../models/Submission.js";
 import User from "../models/User.js";
-import { hasActivePolicy, getActivePolicyTypes } from "../utils/policyCheck.js";
+import { hasActivePolicy } from "../utils/policyCheck.js";
 
 const router = express.Router();
 
 // Load recent audit messages for a user to provide chat history context to the LLM
 async function loadUserAudit(userId, maxMessages = 100) {
   try {
+    // Prefer loading chat history from MongoDB Audit collection when connected
+    const { isMongoConnected } = await import("../utils/db.js");
+    if (isMongoConnected()) {
+      try {
+        const { default: Audit } = await import("../models/Audit.js");
+        const docs = await Audit.find({ userId }).sort({ at: 1 }).lean();
+        const messages = [];
+        for (const entry of docs) {
+          const at = entry.at || entry.createdAt || new Date().toISOString();
+          if (entry.message !== undefined)
+            messages.push({
+              who: "user",
+              text: String(entry.message),
+              time: at,
+            });
+          if (entry.aiResponse && entry.aiResponse.reply)
+            messages.push({
+              who: "bot",
+              text: String(entry.aiResponse.reply),
+              time: at,
+            });
+        }
+        return messages.slice(-maxMessages);
+      } catch (err) {
+        console.error(
+          "Failed to load audit from MongoDB:",
+          err?.message || err,
+        );
+        // fallback to file
+      }
+    }
+
     const fs = await import("fs");
     const path = await import("path");
     const ROOT = process.cwd();
@@ -120,111 +152,9 @@ router.post("/", async (req, res) => {
   try {
     const userState = await getUserState(userId);
 
-    // Quick-submit heuristic: if user explicitly asks to submit and we have an in-progress workflow with a submit function, submit now.
-    try {
-      // Only allow quick submit if the workflow explicitly indicates it's ready
-      // and the user used an explicit submit confirmation phrase.
-      const confirmSubmitRegex =
-        /\b(submit|submit my (?:claim|application)|submit now|please submit|confirm submit|yes submit|confirm and submit|i want to submit)\b/i;
-      const wf = userState?.workflow;
-      if (wf && wf.submit && wf.submit.function && wf.submit.ready) {
-        // If a confirmation was previously requested, accept a short confirm.
-        const confirmationRequested = Boolean(wf.submit.confirmation_requested);
-        if (
-          (confirmationRequested &&
-            confirmSubmitRegex.test(String(message || ""))) ||
-          (!confirmationRequested &&
-            confirmSubmitRegex.test(String(message || "")))
-        ) {
-          // run submission
-          const payloadField = wf.submit.payload_field || "data";
-          const fnPayload = {
-            user_id: userId,
-            workflow_id: wf.workflow_id,
-            verification: wf.verification || {},
-            [payloadField]: wf.collected_fields || {},
-          };
-          const fnResult = await runFunctionByName(
-            wf.submit.function,
-            fnPayload,
-          );
-          wf.status = "submitted";
-          await setUserState(userId, { workflow: wf });
+    // No server-side quick-submit heuristics: let the LLM decide using full chat_history.
 
-          const reply =
-            fnResult && fnResult.id
-              ? `Your ${wf.workflow_id || "request"} has been submitted (id: ${fnResult.id}). Admins will review and contact you.`
-              : `Your ${wf.workflow_id || "request"} has been submitted. Admins will review and contact you.`;
-
-          writeAudit({
-            at: new Date().toISOString(),
-            userId,
-            message,
-            aiResponse: {
-              reply,
-              function_to_call: { name: wf.submit.function, result: fnResult },
-            },
-          });
-
-          return res.json({
-            reply,
-            workflow: wf,
-            function_to_call: { name: wf.submit.function, result: fnResult },
-          });
-        }
-      }
-    } catch (e) {
-      console.error("Submit heuristic failed:", e?.message || e);
-    }
-
-    if (isClaimIntent(message)) {
-      const activeTypes = await getActivePolicyTypes(userId);
-      if (!activeTypes || activeTypes.length === 0) {
-        let reply =
-          "I can’t file a claim yet because there’s no active policy on your account. If you want, I can help you start a policy first.";
-
-        if (process.env.MOCK_AI !== "true") {
-          try {
-            const systemPrompt =
-              "You are InsureMe support. Reply in 1-2 sentences, natural and empathetic. " +
-              "Explain that there is no active policy on the account, so a claim cannot be filed yet, " +
-              "and offer to help start a policy. Do not mention internal checks, databases, or policies.";
-            const aiReply = await callAIMessage({
-              systemPrompt,
-              userMessage: message,
-            });
-            if (aiReply && aiReply.trim()) reply = aiReply.trim();
-          } catch {
-            // Fallback to default reply
-          }
-        }
-
-        return res.json({
-          reply,
-          workflow: userState?.workflow || null,
-          function_to_call: null,
-        });
-      }
-
-      // If user only has one active policy, prompt to proceed specifically for that type
-      if (activeTypes.length === 1) {
-        const only = activeTypes[0];
-        return res.json({
-          reply: `You have an active ${only} policy. I can help you file a claim for that policy — shall I proceed to collect the claim details?`,
-          workflow: userState?.workflow || null,
-          function_to_call: null,
-        });
-      }
-
-      // Multiple active policies: ask which one
-      return res.json({
-        reply: `You have active policies for: ${activeTypes.join(", ")}. Which policy would you like to file a claim for? (car, house, health, or life)`,
-        workflow: userState?.workflow || null,
-        function_to_call: null,
-      });
-    }
-
-    const context = loadContext();
+    // If there's an active workflow, check for refusals/cancellations first
     if (userState?.workflow) {
       const refusal = handleRefusal({
         message,
@@ -246,6 +176,11 @@ router.post("/", async (req, res) => {
         return res.json(refusal);
       }
     }
+
+    // Let the LLM determine claim intent and next steps using chat_history and context.
+
+    const context = loadContext();
+    // No pre-AI refusal/request heuristics here; we pass full context and history to the LLM.
 
     let submissions = [];
     if (isMongoConnected()) {
