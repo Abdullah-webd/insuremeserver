@@ -8,7 +8,10 @@ export async function getUserState(userId) {
   if (isMongoConnected()) {
     const doc = await User.findOne({ userId }).lean();
     if (doc) {
-      userStore.set(userId, { workflow: doc.workflow || null });
+      userStore.set(userId, {
+        workflow: doc.workflow || null,
+        profile: doc.profile || {},
+      });
       return userStore.get(userId);
     }
   }
@@ -16,12 +19,20 @@ export async function getUserState(userId) {
 }
 
 export async function setUserState(userId, state) {
-  userStore.set(userId, state);
+  // merge with existing in-memory profile if present
+  const existing = userStore.get(userId) || {};
+  const merged = { ...existing, ...state };
+  userStore.set(userId, merged);
   if (isMongoConnected()) {
     await User.updateOne(
       { userId },
-      { $set: { workflow: state.workflow || null } },
-      { upsert: true }
+      {
+        $set: {
+          workflow: merged.workflow || null,
+          profile: merged.profile || {},
+        },
+      },
+      { upsert: true },
     );
   }
 }
@@ -31,4 +42,34 @@ export async function clearUserState(userId) {
   if (isMongoConnected()) {
     await User.deleteOne({ userId });
   }
+}
+
+export async function getUserProfile(userId) {
+  const state = await getUserState(userId);
+  return state?.profile || {};
+}
+
+export async function setUserProfile(userId, profile) {
+  const state = (await getUserState(userId)) || { workflow: null, profile: {} };
+  const merged = {
+    ...state,
+    profile: { ...(state.profile || {}), ...(profile || {}) },
+  };
+  userStore.set(userId, merged);
+  if (isMongoConnected()) {
+    await User.updateOne(
+      { userId },
+      {
+        $set: {
+          profile: merged.profile || {},
+          workflow: merged.workflow || null,
+        },
+      },
+      { upsert: true },
+    );
+  }
+}
+
+export async function setUserLanguage(userId, language) {
+  await setUserProfile(userId, { language });
 }

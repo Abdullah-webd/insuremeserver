@@ -1,7 +1,11 @@
 ﻿// /routes/chat.js
 import express from "express";
 import { loadContext } from "../utils/contextLoader.js";
-import { getUserState, setUserState, clearUserState } from "../utils/userStateStore.js";
+import {
+  getUserState,
+  setUserState,
+  clearUserState,
+} from "../utils/userStateStore.js";
 import { callAI, callAIMessage } from "../utils/aiClient.js";
 import { runVerifications } from "../utils/verification/index.js";
 import { runFunctionByName } from "../utils/functionRunner.js";
@@ -15,6 +19,49 @@ import User from "../models/User.js";
 import { hasActivePolicy, getActivePolicyTypes } from "../utils/policyCheck.js";
 
 const router = express.Router();
+
+// Load recent audit messages for a user to provide chat history context to the LLM
+async function loadUserAudit(userId, maxMessages = 100) {
+  try {
+    const fs = await import("fs");
+    const path = await import("path");
+    const ROOT = process.cwd();
+    const auditPath = path.join(ROOT, "data", "audit.jsonl");
+    if (!fs.existsSync(auditPath)) return [];
+    const raw = fs.readFileSync(auditPath, "utf8");
+    const lines = raw
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    const messages = [];
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        if (entry.userId !== userId) continue;
+        const at = entry.at || entry.timestamp || new Date().toISOString();
+        if (entry.message !== undefined) {
+          messages.push({ who: "user", text: String(entry.message), time: at });
+        }
+        if (entry.aiResponse && entry.aiResponse.reply) {
+          messages.push({
+            who: "bot",
+            text: String(entry.aiResponse.reply),
+            time: at,
+          });
+        }
+      } catch (e) {
+        continue;
+      }
+    }
+    // return last N messages (chronological)
+    messages.sort((a, b) => new Date(a.time) - new Date(b.time));
+    return messages.slice(-maxMessages);
+  } catch (err) {
+    console.error("loadUserAudit error:", err?.message || err);
+    return [];
+  }
+}
 
 function buildPayload({ userId, message, userState, context, submissions }) {
   const paidPolicies = Array.isArray(submissions)
@@ -75,11 +122,21 @@ router.post("/", async (req, res) => {
 
     // Quick-submit heuristic: if user explicitly asks to submit and we have an in-progress workflow with a submit function, submit now.
     try {
-      const submitKeywords =
-        /\b(submit|submit my claim|submit claim|submit application|please submit|proceed to submit|yes submit|submit now)\b/i;
-      if (userState?.workflow && submitKeywords.test(String(message || ""))) {
-        const wf = userState.workflow;
-        if (wf && wf.submit && wf.submit.function) {
+      // Only allow quick submit if the workflow explicitly indicates it's ready
+      // and the user used an explicit submit confirmation phrase.
+      const confirmSubmitRegex =
+        /\b(submit|submit my (?:claim|application)|submit now|please submit|confirm submit|yes submit|confirm and submit|i want to submit)\b/i;
+      const wf = userState?.workflow;
+      if (wf && wf.submit && wf.submit.function && wf.submit.ready) {
+        // If a confirmation was previously requested, accept a short confirm.
+        const confirmationRequested = Boolean(wf.submit.confirmation_requested);
+        if (
+          (confirmationRequested &&
+            confirmSubmitRegex.test(String(message || ""))) ||
+          (!confirmationRequested &&
+            confirmSubmitRegex.test(String(message || "")))
+        ) {
+          // run submission
           const payloadField = wf.submit.payload_field || "data";
           const fnPayload = {
             user_id: userId,
@@ -91,7 +148,6 @@ router.post("/", async (req, res) => {
             wf.submit.function,
             fnPayload,
           );
-          // mark workflow submitted and persist
           wf.status = "submitted";
           await setUserState(userId, { workflow: wf });
 
@@ -265,6 +321,15 @@ router.post("/", async (req, res) => {
       submissions,
     });
 
+    // Attach recent user-specific chat history so the model can make informed, contextual decisions
+    try {
+      const recent = await loadUserAudit(userId, 80);
+      if (recent && recent.length) payload.chat_history = recent;
+    } catch (err) {
+      // continue without history if loading fails
+      console.error("Failed to attach chat_history:", err?.message || err);
+    }
+
     const aiResponse =
       process.env.MOCK_AI === "true"
         ? mockAIResponse({ userId, message })
@@ -324,23 +389,35 @@ router.post("/", async (req, res) => {
       workflow.submit.function &&
       !hasPaidSubmission
     ) {
-      const payloadField = workflow.submit.payload_field || "data";
-      const fnPayload = {
-        user_id: userId,
-        workflow_id: workflow.workflow_id,
-        verification: workflow.verification || {},
-        [payloadField]: workflow.collected_fields,
-      };
-      const fnResult = await runFunctionByName(
-        workflow.submit.function,
-        fnPayload,
-      );
-      aiResponse.function_to_call = {
-        name: workflow.submit.function,
-        result: fnResult,
-      };
-      workflow.status = "submitted";
-      submittedByBackend = true;
+      // Respect workflow-level guardrail: require explicit user confirmation by default.
+      const requireConfirmation =
+        workflow.submit.require_user_confirmation !== false;
+      if (requireConfirmation) {
+        // Ask user to confirm submission instead of auto-submitting.
+        workflow.submit.confirmation_requested = true;
+        aiResponse.reply = aiResponse.reply
+          ? `${aiResponse.reply}\n\nYour application looks ready to submit. Reply 'yes submit' to confirm.`
+          : "Your application looks ready to submit. Reply 'yes submit' to confirm.";
+      } else {
+        // workflow explicitly allows auto submit
+        const payloadField = workflow.submit.payload_field || "data";
+        const fnPayload = {
+          user_id: userId,
+          workflow_id: workflow.workflow_id,
+          verification: workflow.verification || {},
+          [payloadField]: workflow.collected_fields,
+        };
+        const fnResult = await runFunctionByName(
+          workflow.submit.function,
+          fnPayload,
+        );
+        aiResponse.function_to_call = {
+          name: workflow.submit.function,
+          result: fnResult,
+        };
+        workflow.status = "submitted";
+        submittedByBackend = true;
+      }
     }
 
     if (
