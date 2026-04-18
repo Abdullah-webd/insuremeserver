@@ -1,7 +1,7 @@
 ﻿// /routes/chat.js
 import express from "express";
 import { loadContext } from "../utils/contextLoader.js";
-import { getUserState, setUserState } from "../utils/userStateStore.js";
+import { getUserState, setUserState, clearUserState } from "../utils/userStateStore.js";
 import { callAI, callAIMessage } from "../utils/aiClient.js";
 import { runVerifications } from "../utils/verification/index.js";
 import { runFunctionByName } from "../utils/functionRunner.js";
@@ -176,7 +176,11 @@ router.post("/", async (req, res) => {
         userId,
       });
       if (refusal) {
-        await setUserState(userId, { workflow: refusal.workflow });
+        if (refusal.workflow === null) {
+          await clearUserState(userId);
+        } else {
+          await setUserState(userId, { workflow: refusal.workflow });
+        }
         writeAudit({
           at: new Date().toISOString(),
           userId,
