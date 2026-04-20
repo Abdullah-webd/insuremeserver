@@ -1,4 +1,4 @@
-﻿// /routes/chat.js
+// /routes/chat.js
 import express from "express";
 import { loadContext } from "../utils/contextLoader.js";
 import {
@@ -359,7 +359,8 @@ router.post("/", async (req, res) => {
       workflow &&
       !submittedByBackend &&
       workflow.status === "submitted" &&
-      !hasPaidSubmission
+      !hasPaidSubmission &&
+      !workflow.submit?.confirmation_requested
     ) {
       const wfDef = workflow.submit?.function
         ? workflow
@@ -388,6 +389,7 @@ router.post("/", async (req, res) => {
             name: wfDef.submit.function,
             result: fnResult,
           };
+          submittedByBackend = true;
         }
       }
     }
@@ -398,10 +400,12 @@ router.post("/", async (req, res) => {
     }
 
     // If the model suggested a backend function to call (function_to_call), execute it here.
+    // BUT only if we haven't already submitted something via the workflow blocks above.
     if (
       aiResponse.function_to_call &&
       aiResponse.function_to_call.name &&
-      !aiResponse.function_to_call.result
+      !aiResponse.function_to_call.result &&
+      !submittedByBackend
     ) {
       try {
         const fnName = aiResponse.function_to_call.name;
@@ -415,6 +419,7 @@ router.post("/", async (req, res) => {
           parameters: params,
           result: fnResult,
         };
+        submittedByBackend = true;
       } catch (err) {
         aiResponse.function_to_call = {
           ...aiResponse.function_to_call,
