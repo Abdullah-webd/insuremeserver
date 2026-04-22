@@ -12,7 +12,7 @@ import { runFunctionByName } from "../utils/functionRunner.js";
 import { evaluateWorkflowReady } from "../utils/workflowUtils.js";
 import { writeAudit } from "../utils/auditLogger.js";
 import { ensureImagesStored } from "../utils/imageStore.js";
-import { handleRefusal } from "../utils/refusalHandler.js";
+
 import { isMongoConnected } from "../utils/db.js";
 import Submission from "../models/Submission.js";
 import User from "../models/User.js";
@@ -127,12 +127,7 @@ function mockAIResponse({ userId, message }) {
   };
 }
 
-function isClaimIntent(message) {
-  if (!message) return false;
-  return /(claim|file\s+claim|make\s+a\s+claim|submit\s+a\s+claim|insurance\s+claim)/i.test(
-    message,
-  );
-}
+
 
 async function submissionExists({ userId, workflowId }) {
   if (!isMongoConnected()) return false;
@@ -154,28 +149,7 @@ router.post("/", async (req, res) => {
 
     // No server-side quick-submit heuristics: let the LLM decide using full chat_history.
 
-    // If there's an active workflow, check for refusals/cancellations first
-    if (userState?.workflow) {
-      const refusal = handleRefusal({
-        message,
-        workflow: userState.workflow,
-        userId,
-      });
-      if (refusal) {
-        if (refusal.workflow === null) {
-          await clearUserState(userId);
-        } else {
-          await setUserState(userId, { workflow: refusal.workflow });
-        }
-        writeAudit({
-          at: new Date().toISOString(),
-          userId,
-          message,
-          aiResponse: refusal,
-        });
-        return res.json(refusal);
-      }
-    }
+
 
     // Let the LLM determine claim intent and next steps using chat_history and context.
 
@@ -189,64 +163,7 @@ router.post("/", async (req, res) => {
         .lean();
     }
 
-    // Heuristic: if user message includes an email and mentions updating/changing contact, create an admin request immediately.
-    try {
-      const emailMatch = String(message || "").match(
-        /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/,
-      );
-      const triggerKeywords =
-        /(update|change|new|replace).*(email|contact)|email.*(update|change|new)|tell.*admin|notify.*admin|contacting me/i;
-      if (emailMatch && triggerKeywords.test(message || "")) {
-        const latest =
-          submissions && submissions.length ? submissions[0] : null;
-        const submissionId = latest?._id?.toString() || null;
-        const userRec = isMongoConnected()
-          ? await User.findOne({ userId }).lean()
-          : null;
 
-        const params = {
-          user_id: userId,
-          user_name:
-            userRec?.profile?.full_name || latest?.data?.full_name || null,
-          user_phone: userRec?.profile?.phone || latest?.data?.phone || null,
-          title: "Update contact email",
-          message: String(message || ""),
-          type: "contact_update",
-          data: { submissionId, newEmail: emailMatch[0] },
-        };
-
-        const fnResult = await runFunctionByName(
-          "request_admin_action",
-          params,
-        );
-        writeAudit({
-          at: new Date().toISOString(),
-          userId,
-          message,
-          aiResponse: {
-            reply: `Created admin request ${fnResult.request?._id || fnResult.request}`,
-            function_to_call: {
-              name: "request_admin_action",
-              parameters: params,
-              result: fnResult,
-            },
-          },
-        });
-
-        return res.json({
-          reply: `Request created (id: ${fnResult.request?._id || "unknown"}). Admins will review and contact you.`,
-          workflow: userState?.workflow || null,
-          function_to_call: {
-            name: "request_admin_action",
-            parameters: params,
-            result: fnResult,
-          },
-        });
-      }
-    } catch (e) {
-      // don't block the main flow on heuristic errors
-      console.error("Request heuristic failed:", e?.message || e);
-    }
 
     const payload = buildPayload({
       userId,
