@@ -1,4 +1,4 @@
-﻿import { verifyBVN, verifyNIN } from "./dojah.js";
+import { verifyBVN, verifyNIN } from "./dojah.js";
 import { verifyImageOpenAI, verifyPlateOpenAI } from "./openaiVision.js";
 import { verifyPlatePrembly } from "./prembly.js";
 
@@ -13,6 +13,14 @@ function isDigits(value, length) {
   const s = String(value || "").trim();
   const re = length ? new RegExp(`^\\d{${length}}$`) : /^\d+$/;
   return re.test(s);
+}
+
+function isNigerianPlate(value) {
+  // Clear any hyphens or spaces and check if it follows 3-letters, 3-digits, 2-letters
+  const s = String(value || "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toUpperCase();
+  return /^[A-Z]{3}\d{3}[A-Z]{2}$/.test(s);
 }
 
 async function maybeVerifyImage(fieldKey, workflow) {
@@ -96,6 +104,14 @@ export async function runVerifications(workflow) {
           meta.status = isDigits(fields.bvn, 11) ? "verified" : "failed";
           meta.result = {
             note: "BVN format-only check (not verified with official source)",
+            valid_format: meta.status === "verified"
+          };
+        } else if (key === "plate_number" && fields.plate_number) {
+          meta.status = isNigerianPlate(fields.plate_number)
+            ? "verified"
+            : "failed";
+          meta.result = {
+            note: "Plate number format-only check",
             valid_format: meta.status === "verified"
           };
         }
