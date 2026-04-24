@@ -12,6 +12,7 @@ import { runFunctionByName } from "../utils/functionRunner.js";
 import { evaluateWorkflowReady } from "../utils/workflowUtils.js";
 import { writeAudit } from "../utils/auditLogger.js";
 import { ensureImagesStored } from "../utils/imageStore.js";
+import { translateToEnglish, translateFromEnglish } from "../utils/translator.js";
 
 import { isMongoConnected } from "../utils/db.js";
 import Submission from "../models/Submission.js";
@@ -35,13 +36,13 @@ async function loadUserAudit(userId, maxMessages = 100) {
           if (entry.message !== undefined)
             messages.push({
               who: "user",
-              text: String(entry.message),
+              text: entry.english_message || String(entry.message),
               time: at,
             });
           if (entry.aiResponse && entry.aiResponse.reply)
             messages.push({
               who: "bot",
-              text: String(entry.aiResponse.reply),
+              text: entry.aiResponse.english_reply || String(entry.aiResponse.reply),
               time: at,
             });
         }
@@ -73,12 +74,16 @@ async function loadUserAudit(userId, maxMessages = 100) {
         if (entry.userId !== userId) continue;
         const at = entry.at || entry.timestamp || new Date().toISOString();
         if (entry.message !== undefined) {
-          messages.push({ who: "user", text: String(entry.message), time: at });
+          messages.push({ 
+            who: "user", 
+            text: entry.english_message || String(entry.message), 
+            time: at 
+          });
         }
         if (entry.aiResponse && entry.aiResponse.reply) {
           messages.push({
             who: "bot",
-            text: String(entry.aiResponse.reply),
+            text: entry.aiResponse.english_reply || String(entry.aiResponse.reply),
             time: at,
           });
         }
@@ -139,13 +144,20 @@ async function submissionExists({ userId, workflowId }) {
 }
 
 router.post("/", async (req, res) => {
-  const { userId, message } = req.body || {};
+  const { userId, message, language = "English" } = req.body || {};
   if (!userId || !message) {
     return res.status(400).json({ error: "userId and message are required" });
   }
 
   try {
     const userState = await getUserState(userId);
+
+    // Translation layer
+    let processedMessage = message;
+    if (language && language !== "English") {
+      processedMessage = await translateToEnglish(message, language);
+      console.log(`Translated [${language}] "${message}" to English: "${processedMessage}"`);
+    }
 
     // No server-side quick-submit heuristics: let the LLM decide using full chat_history.
 
@@ -167,7 +179,7 @@ router.post("/", async (req, res) => {
 
     const payload = buildPayload({
       userId,
-      message,
+      message: processedMessage,
       userState,
       context,
       submissions,
@@ -184,7 +196,7 @@ router.post("/", async (req, res) => {
 
     const aiResponse =
       process.env.MOCK_AI === "true"
-        ? mockAIResponse({ userId, message })
+        ? mockAIResponse({ userId, message: processedMessage })
         : await callAI(payload);
 
     let workflow = aiResponse.workflow || null;
@@ -345,10 +357,18 @@ router.post("/", async (req, res) => {
       }
     }
 
+    if (language && language !== "English" && aiResponse.reply) {
+      const originalReply = aiResponse.reply;
+      aiResponse.english_reply = originalReply; // Save the English version for future history
+      aiResponse.reply = await translateFromEnglish(originalReply, language);
+      console.log(`Translated response to [${language}]: "${aiResponse.reply}"`);
+    }
+
     writeAudit({
       at: new Date().toISOString(),
       userId,
-      message,
+      message, // This is the original language message
+      english_message: processedMessage, // This is the English version
       aiResponse,
     });
 
