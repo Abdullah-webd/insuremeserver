@@ -16,5 +16,5 @@
     "Provide beneficiary details",
     "Disclose pre-existing conditions"
   ],
-  "admin_verification": ["BVN", "NIN", "Medical history verification", "Beneficiary details verification"]
+  "admin_verification": ["Medical history verification", "Beneficiary details verification"]
 }

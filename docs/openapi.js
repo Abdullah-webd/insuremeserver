@@ -105,12 +105,12 @@ const openapiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  field: { type: "string", enum: ["bvn", "nin", "plate_number"] },
+                  field: { type: "string", enum: ["plate_number"] },
                   value: { type: "string", description: "Optional override value to verify" }
                 },
                 required: ["field"]
               },
-              example: { field: "bvn" }
+              example: { field: "plate_number" }
             }
           }
         },

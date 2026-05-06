@@ -1,4 +1,4 @@
-﻿import { loadContext } from "./contextLoader.js";
+import { loadContext } from "./contextLoader.js";
 
 function extractOutputText(data) {
   if (data.output_text) return data.output_text;
@@ -29,13 +29,13 @@ function parseJsonFromText(text) {
   }
 }
 
-export async function callAI(payload) {
+export async function callAI(payload, customModel = null) {
   const { system_prompt } = loadContext();
 
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = customModel || process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -66,11 +66,11 @@ export async function callAI(payload) {
   return parsed;
 }
 
-export async function callAIMessage({ systemPrompt, userMessage }) {
+export async function callAIMessage({ systemPrompt, userMessage, model: customModel = null }) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-  const model = process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = customModel || process.env.OPENAI_MODEL || "gpt-4.1-mini";
 
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",

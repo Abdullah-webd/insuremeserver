@@ -16,5 +16,5 @@
     "Provide photos of the house and its contents",
     "Report damages promptly"
   ],
-  "admin_verification": ["BVN", "NIN", "property verification", "contents verification"]
+  "admin_verification": ["property verification", "contents verification"]
 }

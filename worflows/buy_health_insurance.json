@@ -1,4 +1,4 @@
-﻿{
+{
   "workflow_id": "buy_health_insurance",
   "name": "Health Insurance Registration",
   "description": "Collect personal and health details to register for health insurance.",
@@ -22,6 +22,20 @@
       "validation": { "min_length": 3 }
     },
     {
+      "id": "gender",
+      "field": "gender",
+      "type": "string",
+      "prompt": "What is your gender?",
+      "required": false
+    },
+    {
+      "id": "address",
+      "field": "address",
+      "type": "string",
+      "prompt": "What is your home address?",
+      "required": true
+    },
+    {
       "id": "phone",
       "field": "phone",
       "type": "string",
@@ -38,25 +52,13 @@
       "validation": { "format": "email" }
     },
     {
-      "id": "bvn",
-      "field": "bvn",
+      "id": "occupation",
+      "field": "occupation",
       "type": "string",
-      "prompt": "Please provide your BVN.",
-      "required": true,
-      "validation": { "format": "bvn" },
-      "verification_required": true,
-      "verification_action": "verify_bvn"
+      "prompt": "What is your occupation/job title?",
+      "required": true
     },
-    {
-      "id": "nin",
-      "field": "nin",
-      "type": "string",
-      "prompt": "Please provide your NIN.",
-      "required": true,
-      "validation": { "format": "nin" },
-      "verification_required": true,
-      "verification_action": "verify_nin"
-    },
+
     {
       "id": "date_of_birth",
       "field": "date_of_birth",
@@ -66,11 +68,46 @@
       "validation": { "format": "date" }
     },
     {
+      "id": "current_health_condition",
+      "field": "current_health_condition",
+      "type": "string",
+      "prompt": "How would you describe your current health condition?",
+      "required": true
+    },
+    {
       "id": "pre_existing_conditions",
       "field": "pre_existing_conditions",
       "type": "string",
       "prompt": "Do you have any pre-existing conditions? If none, say 'None'.",
       "required": true
+    },
+    {
+      "id": "hospital_visits",
+      "field": "hospital_visits",
+      "type": "string",
+      "prompt": "Any previous hospital visits/admissions in the last 12 months? If none, say 'None'.",
+      "required": false
+    },
+    {
+      "id": "medications",
+      "field": "medications",
+      "type": "string",
+      "prompt": "Are you currently taking any medications? If none, say 'None'.",
+      "required": false
+    },
+    {
+      "id": "lifestyle_habits",
+      "field": "lifestyle_habits",
+      "type": "string",
+      "prompt": "Lifestyle habits (smoking/drinking/exercise). If none, say 'None'.",
+      "required": false
+    },
+    {
+      "id": "preferred_hospital",
+      "field": "preferred_hospital",
+      "type": "string",
+      "prompt": "Do you have a preferred hospital/doctor? If yes, tell us. If no, say 'No preference'.",
+      "required": false
     },
     {
       "id": "next_of_kin",
@@ -88,10 +125,17 @@
       "validation": { "format": "phone_ng" }
     },
     {
+      "id": "documents",
+      "field": "documents",
+      "type": "array",
+      "prompt": "Please upload any supporting medical documents (if any). You can upload images or PDFs.",
+      "required": false
+    },
+    {
       "id": "evidence",
       "field": "evidence",
       "type": "array",
-      "prompt": "Please upload supporting photos or videos.",
+      "prompt": "Please upload any additional evidence (photos/videos/documents).",
       "required": true,
       "validation": { "min_items": 1 }
     }
@@ -99,20 +143,24 @@
   "collected_fields": {
     "policy_understood": null,
     "full_name": null,
+    "gender": null,
+    "address": null,
     "phone": null,
     "email": null,
-    "bvn": null,
-    "nin": null,
+    "occupation": null,
     "date_of_birth": null,
+    "current_health_condition": null,
     "pre_existing_conditions": null,
+    "hospital_visits": null,
+    "medications": null,
+    "lifestyle_habits": null,
+    "preferred_hospital": null,
     "next_of_kin": null,
     "next_of_kin_phone": null,
+    "documents": [],
     "evidence": []
   },
-  "verification": {
-    "bvn": { "required": true, "status": "pending", "provider": "format_only" },
-    "nin": { "required": true, "status": "pending", "provider": "format_only" }
-  },
+  "verification": {},
   "submit": {
     "ready": false,
     "function": "submit_health_insurance_application",

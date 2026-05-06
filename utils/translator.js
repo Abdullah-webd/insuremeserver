@@ -14,7 +14,7 @@ export async function translateToEnglish(text, sourceLanguage) {
   const systemPrompt = `You are a professional and neutral translator. Translate the following text from ${sourceLanguage} to English. ONLY return the translation. Do NOT add any extra information, greetings, or conversational filler. Preserve the core meaning exactly.`;
   
   try {
-    const result = await callAIMessage({ systemPrompt, userMessage: text });
+    const result = await callAIMessage({ systemPrompt, userMessage: text, model: "gpt-4o-mini" });
     return result.trim();
   } catch (error) {
     console.error("Translation to English failed:", error);
@@ -36,7 +36,7 @@ export async function translateFromEnglish(text, targetLanguage) {
   const systemPrompt = `You are a professional and neutral translator. Translate the following English text to ${targetLanguage}. ONLY return the translation. Do NOT add any extra information, greetings, professional advice, or help beyond what is in the original text. Be extremely concise and strictly follow the source text.`;
 
   try {
-    const result = await callAIMessage({ systemPrompt, userMessage: text });
+    const result = await callAIMessage({ systemPrompt, userMessage: text, model: "gpt-4o-mini" });
     return result.trim();
   } catch (error) {
     console.error(`Translation to ${targetLanguage} failed:`, error);

@@ -1,14 +1,14 @@
-﻿import express from "express";
+import express from "express";
 import mongoose from "mongoose";
 import Submission from "../models/Submission.js";
 import User from "../models/User.js";
 import { isMongoConnected } from "../utils/db.js";
 import { initializeTransaction, verifyTransaction } from "../utils/paystack.js";
 import { sendEmail } from "../utils/emailer.js";
-import { buildApprovalEmail } from "../utils/emailTemplates.js";
+import { buildApprovalEmail, buildRejectionEmail } from "../utils/emailTemplates.js";
 import { uploadImagesInData } from "../utils/imageStore.js";
 import { clearUserState } from "../utils/userStateStore.js";
-import Request from "../models/Request.js";
+
 
 const router = express.Router();
 
@@ -25,25 +25,7 @@ async function fetchSubmissionByIdOrUserId(id, lean = false) {
 function validateIdentityField({ field, value }) {
   const v = String(value ?? "").trim();
 
-  if (field === "bvn") {
-    const ok = /^\d{11}$/.test(v);
-    return {
-      ok,
-      reason: ok
-        ? "BVN format looks valid (11 digits)."
-        : "BVN must be exactly 11 digits.",
-    };
-  }
 
-  if (field === "nin") {
-    const ok = /^\d{11}$/.test(v);
-    return {
-      ok,
-      reason: ok
-        ? "NIN format looks valid (11 digits)."
-        : "NIN must be exactly 11 digits.",
-    };
-  }
 
   if (field === "plate_number") {
     // MVP format check only (real integrations later).
@@ -132,10 +114,14 @@ router.get("/submissions", async (req, res) => {
     return res.status(503).json({ error: "MongoDB not connected" });
   }
 
-  const { userId, type, limit = 20, skip = 0 } = req.query;
+  const { userId, type, includeRejected = "false", limit = 20, skip = 0 } =
+    req.query;
   const query = {};
   if (userId) query.userId = userId;
   if (type) query.type = type;
+  if (String(includeRejected).toLowerCase() !== "true") {
+    query.status = { $ne: "rejected" };
+  }
 
   const items = await Submission.find(query)
     .sort({ createdAt: -1 })
@@ -143,7 +129,21 @@ router.get("/submissions", async (req, res) => {
     .limit(Number(limit))
     .lean();
 
-  res.json({ items });
+  const userIds = [...new Set(items.map((i) => i.userId))];
+  const users = await User.find({ userId: { $in: userIds } })
+    .select("userId name profile.full_name")
+    .lean();
+  const userMap = users.reduce((acc, u) => {
+    acc[u.userId] = u.name || u?.profile?.full_name || null;
+    return acc;
+  }, {});
+
+  const itemsWithNames = items.map((item) => ({
+    ...item,
+    userName: userMap[item.userId] || null,
+  }));
+
+  res.json({ items: itemsWithNames });
 });
 
 router.get("/submissions/:id", async (req, res) => {
@@ -183,48 +183,45 @@ router.get("/users", async (req, res) => {
   res.json({ items });
 });
 
-// Requests endpoints for admin
-router.get("/requests", async (req, res) => {
-  if (!isMongoConnected())
-    return res.status(503).json({ error: "MongoDB not connected" });
-  const { limit = 50, skip = 0 } = req.query;
-  const items = await Request.find({})
-    .sort({ createdAt: -1 })
-    .skip(Number(skip))
-    .limit(Number(limit))
-    .lean();
-  res.json({ items });
+router.get("/verifiers", async (req, res) => {
+  if (!isMongoConnected()) return res.status(503).json({ error: "DB not connected" });
+  const verifiers = await User.find({ role: "verifier" }).select("name userId email _id").lean();
+  res.json({ items: verifiers });
 });
 
-router.get("/requests/:id", async (req, res) => {
-  if (!isMongoConnected())
-    return res.status(503).json({ error: "MongoDB not connected" });
-  const request = await Request.findById(req.params.id).lean();
-  if (!request) return res.status(404).json({ error: "Request not found" });
-  res.json({ request });
+router.post("/submissions/:id/assign", async (req, res) => {
+  if (!isMongoConnected()) return res.status(503).json({ error: "DB not connected" });
+  const { verifierId } = req.body;
+  const submission = await Submission.findById(req.params.id);
+  if (!submission) return res.status(404).json({ error: "Submission not found" });
+
+  const normalized =
+    verifierId === undefined || verifierId === null || String(verifierId).trim() === ""
+      ? null
+      : String(verifierId).trim().toLowerCase() === "undefined" ||
+          String(verifierId).trim().toLowerCase() === "null"
+        ? null
+        : verifierId;
+
+  if (normalized !== null && !mongoose.Types.ObjectId.isValid(normalized)) {
+    const byUserId = await User.findOne({ userId: String(normalized).trim(), role: "verifier" })
+      .select("_id")
+      .lean();
+    if (!byUserId?._id) {
+      return res.status(400).json({
+        error: "verifierId must be a valid ObjectId, a verifier userId, or null",
+      });
+    }
+    submission.verifierId = byUserId._id;
+    await submission.save();
+    return res.json({ ok: true, submission });
+  }
+
+  submission.verifierId = normalized === null ? null : normalized;
+  await submission.save();
+  res.json({ ok: true, submission });
 });
 
-router.post("/requests/:id/send-email", async (req, res) => {
-  if (!isMongoConnected())
-    return res.status(503).json({ error: "MongoDB not connected" });
-  const request = await Request.findById(req.params.id);
-  if (!request) return res.status(404).json({ error: "Request not found" });
-
-  const { subject, html, text } = req.body || {};
-  // Prefer user profile email if available
-  const user = await User.findOne({ userId: request.userId }).lean();
-  const to = user?.profile?.email || req.body?.to || null;
-  if (!to)
-    return res.status(400).json({ error: "No recipient email available" });
-
-  await sendEmail({
-    to,
-    subject: subject || `Response to your request: ${request.title}`,
-    html,
-    text,
-  });
-  res.json({ ok: true });
-});
 
 router.patch("/users/:userId/profile", async (req, res) => {
   if (!isMongoConnected()) {
@@ -412,7 +409,11 @@ router.post("/submissions/:id/approve", async (req, res) => {
 
   const user = await User.findOne({ userId: submission.userId }).lean();
   const email =
-    req.body.email || user?.profile?.email || submission.data?.email || null;
+    req.body.email ||
+    user?.profile?.email ||
+    user?.email ||
+    submission.data?.email ||
+    null;
   if (!email) return res.status(400).json({ error: "User email is required" });
 
   const premium = req.body.premiumFinal || submission.premiumFinal;
@@ -463,14 +464,49 @@ router.post("/submissions/:id/reject", async (req, res) => {
     return res.status(503).json({ error: "MongoDB not connected" });
   }
 
-  const submission = await Submission.findById(req.params.id);
+  const submission = await fetchSubmissionByIdOrUserId(req.params.id);
   if (!submission)
     return res.status(404).json({ error: "Submission not found" });
 
+  if (submission.status === "paid") {
+    return res.status(400).json({ error: "Cannot reject a paid submission" });
+  }
+
+  const reason =
+    typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+  if (!reason) {
+    return res.status(400).json({ error: "Rejection reason is required" });
+  }
+
   submission.status = "rejected";
+  submission.rejectionReason = reason;
+  submission.rejectedAt = new Date();
   await submission.save();
 
-  res.json({ ok: true, submission });
+  const user = await User.findOne({ userId: submission.userId }).lean();
+  const email = user?.profile?.email || user?.email || submission.data?.email || null;
+  let emailSent = false;
+  if (email) {
+    try {
+      const kind =
+        String(submission.type || "").toLowerCase().includes("claim") ||
+        String(submission.workflowId || "").toLowerCase().includes("claim")
+          ? "claim"
+          : "application";
+
+      const emailContent = buildRejectionEmail({
+        userName: user?.profile?.full_name || submission.data?.full_name,
+        kind,
+        reason,
+      });
+      await sendEmail({ to: email, ...emailContent });
+      emailSent = true;
+    } catch (err) {
+      console.error("Reject email failed:", err?.message || err);
+    }
+  }
+
+  res.json({ ok: true, emailSent, submission });
 });
 
 router.post("/submissions/:id/verify-payment", async (req, res) => {

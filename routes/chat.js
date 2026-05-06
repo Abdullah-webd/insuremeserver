@@ -1,146 +1,19 @@
-// /routes/chat.js
 import express from "express";
-import { loadContext } from "../utils/contextLoader.js";
-import {
-  getUserState,
-  setUserState,
-  clearUserState,
-} from "../utils/userStateStore.js";
-import { callAI, callAIMessage } from "../utils/aiClient.js";
-import { runVerifications } from "../utils/verification/index.js";
-import { runFunctionByName } from "../utils/functionRunner.js";
-import { evaluateWorkflowReady } from "../utils/workflowUtils.js";
 import { writeAudit } from "../utils/auditLogger.js";
-import { ensureImagesStored } from "../utils/imageStore.js";
 import { translateToEnglish, translateFromEnglish } from "../utils/translator.js";
-
 import { isMongoConnected } from "../utils/db.js";
 import Submission from "../models/Submission.js";
-import User from "../models/User.js";
-import { hasActivePolicy } from "../utils/policyCheck.js";
+import { createGraph } from "../src/agent/graph.js";
+import { HumanMessage } from "@langchain/core/messages";
 
 const router = express.Router();
+let compiledGraph = null;
 
-// Load recent audit messages for a user to provide chat history context to the LLM
-async function loadUserAudit(userId, maxMessages = 100) {
-  try {
-    // Prefer loading chat history from MongoDB Audit collection when connected
-    const { isMongoConnected } = await import("../utils/db.js");
-    if (isMongoConnected()) {
-      try {
-        const { default: Audit } = await import("../models/Audit.js");
-        const docs = await Audit.find({ userId }).sort({ at: 1 }).lean();
-        const messages = [];
-        for (const entry of docs) {
-          const at = entry.at || entry.createdAt || new Date().toISOString();
-          if (entry.message !== undefined)
-            messages.push({
-              who: "user",
-              text: entry.english_message || String(entry.message),
-              time: at,
-            });
-          if (entry.aiResponse && entry.aiResponse.reply)
-            messages.push({
-              who: "bot",
-              text: entry.aiResponse.english_reply || String(entry.aiResponse.reply),
-              time: at,
-            });
-        }
-        return messages.slice(-maxMessages);
-      } catch (err) {
-        console.error(
-          "Failed to load audit from MongoDB:",
-          err?.message || err,
-        );
-        // fallback to file
-      }
+async function getGraph() {
+    if (!compiledGraph) {
+        compiledGraph = await createGraph();
     }
-
-    const fs = await import("fs");
-    const path = await import("path");
-    const ROOT = process.cwd();
-    const auditPath = path.join(ROOT, "data", "audit.jsonl");
-    if (!fs.existsSync(auditPath)) return [];
-    const raw = fs.readFileSync(auditPath, "utf8");
-    const lines = raw
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
-
-    const messages = [];
-    for (const line of lines) {
-      try {
-        const entry = JSON.parse(line);
-        if (entry.userId !== userId) continue;
-        const at = entry.at || entry.timestamp || new Date().toISOString();
-        if (entry.message !== undefined) {
-          messages.push({ 
-            who: "user", 
-            text: entry.english_message || String(entry.message), 
-            time: at 
-          });
-        }
-        if (entry.aiResponse && entry.aiResponse.reply) {
-          messages.push({
-            who: "bot",
-            text: entry.aiResponse.english_reply || String(entry.aiResponse.reply),
-            time: at,
-          });
-        }
-      } catch (e) {
-        continue;
-      }
-    }
-    // return last N messages (chronological)
-    messages.sort((a, b) => new Date(a.time) - new Date(b.time));
-    return messages.slice(-maxMessages);
-  } catch (err) {
-    console.error("loadUserAudit error:", err?.message || err);
-    return [];
-  }
-}
-
-function buildPayload({ userId, message, userState, context, submissions }) {
-  const paidPolicies = Array.isArray(submissions)
-    ? submissions.filter(
-        (s) => s.status === "paid" || s.paymentStatus === "success",
-      )
-    : [];
-
-  return {
-    user_id: userId,
-    message,
-    current_workflow: userState?.workflow || null,
-    user_submissions: submissions || [],
-    active_policies: paidPolicies,
-    policies: context.policies,
-    workflows: context.workflows,
-  };
-}
-
-function mockAIResponse({ userId, message }) {
-  return {
-    reply: `AI received: ${message}`,
-    workflow: {
-      user_id: userId,
-      workflow_id: "registration",
-      current_step: 0,
-      collected_fields: { full_name: null, email: null, phone: null },
-      status: "in_progress",
-    },
-    function_to_call: null,
-  };
-}
-
-
-
-async function submissionExists({ userId, workflowId }) {
-  if (!isMongoConnected()) return false;
-  if (!userId || !workflowId) return false;
-  const existing = await Submission.findOne({ userId, workflowId })
-    .select("_id")
-    .lean();
-  return Boolean(existing);
+    return compiledGraph;
 }
 
 router.post("/", async (req, res) => {
@@ -150,230 +23,101 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    const userState = await getUserState(userId);
-
-    // Translation layer
+    // 1. Pre-process translation
     let processedMessage = message;
     if (language && language !== "English") {
       processedMessage = await translateToEnglish(message, language);
       console.log(`Translated [${language}] "${message}" to English: "${processedMessage}"`);
     }
 
-    // No server-side quick-submit heuristics: let the LLM decide using full chat_history.
-
-
-
-    // Let the LLM determine claim intent and next steps using chat_history and context.
-
-    const context = loadContext();
-    // No pre-AI refusal/request heuristics here; we pass full context and history to the LLM.
-
+    // 2. Fetch context
     let submissions = [];
     if (isMongoConnected()) {
-      submissions = await Submission.find({ userId })
-        .sort({ createdAt: -1 })
-        .lean();
+      submissions = await Submission.find({ userId }).sort({ createdAt: -1 }).lean();
     }
+    const paidPolicies = submissions.filter(s => s.status === "paid" || s.paymentStatus === "success");
 
+    // 3. Prepare Graph Invocation
+    const graph = await getGraph();
+    const config = { configurable: { thread_id: userId } };
+    
+    // We send the new user message to the graph
+    const result = await graph.invoke({
+        messages: [new HumanMessage(processedMessage)],
+        userId,
+        language,
+        active_policies: paidPolicies.map(p => p.type),
+        user_submissions: submissions.map((s) => ({
+            status: s.status,
+            paymentStatus: s.paymentStatus,
+            type: s.type,
+            workflowId: s.workflowId,
+            policyType: s?.data?.policy_type || null,
+            rejectionReason: s.rejectionReason || "",
+            rejectedAt: s.rejectedAt || null,
+        }))
+    }, config);
 
+    // 4. Extract results
+    const lastMessage = result.messages[result.messages.length - 1];
+    let replyText = lastMessage?.content || "I'm sorry, I couldn't process that.";
+    const workflowId = result.workflow_id === "__CLEAR__" ? null : result.workflow_id;
+    const collectedFields = result.collected_fields === "__CLEAR__" ? {} : (result.collected_fields || {});
+    
+    // Convert to old aiResponse format for frontend compatibility
+    const aiResponse = {
+        reply: replyText,
+        english_reply: replyText,
+        workflow: workflowId ? {
+            workflow_id: workflowId,
+            collected_fields: collectedFields,
+            status: "in_progress"
+        } : null,
+        function_to_call: result.ai_function_call === "__CLEAR__" ? null : result.ai_function_call
+    };
 
-    const payload = buildPayload({
-      userId,
-      message: processedMessage,
-      userState,
-      context,
-      submissions,
-    });
-
-    // Attach recent user-specific chat history so the model can make informed, contextual decisions
-    try {
-      const recent = await loadUserAudit(userId, 80);
-      if (recent && recent.length) payload.chat_history = recent;
-    } catch (err) {
-      // continue without history if loading fails
-      console.error("Failed to attach chat_history:", err?.message || err);
-    }
-
-    const aiResponse =
-      process.env.MOCK_AI === "true"
-        ? mockAIResponse({ userId, message: processedMessage })
-        : await callAI(payload);
-
-    let workflow = aiResponse.workflow || null;
-    workflow = await ensureImagesStored(workflow);
-    workflow = await runVerifications(workflow);
-    workflow = evaluateWorkflowReady(workflow);
-
-    // Restrict claim policy types to only active policies
-    const activeTypes = Array.isArray(submissions)
-      ? submissions
-          .filter((s) => s.status === "paid" || s.paymentStatus === "success")
-          .map((s) => {
-            if (s.type?.includes("car")) return "car";
-            if (s.type?.includes("house")) return "house";
-            if (s.type?.includes("health")) return "health";
-            if (s.type?.includes("life")) return "life";
-            return null;
-          })
-          .filter(Boolean)
-      : [];
-    const uniqueActive = [...new Set(activeTypes)];
-
-    if (
-      workflow?.workflow_id === "file_claim" &&
-      workflow.collected_fields?.policy_type == null &&
-      workflow.current_step === 0
-    ) {
-      if (uniqueActive.length === 1) {
-        workflow.collected_fields.policy_type = uniqueActive[0];
-        workflow.current_step = 1;
-        const nextStep = workflow.steps?.[1];
-        if (nextStep?.prompt) {
-          aiResponse.reply = `You can only file a claim for your active ${uniqueActive[0]} policy. ${nextStep.prompt}`;
-        }
-      } else if (uniqueActive.length > 1) {
-        aiResponse.reply =
-          "You can only file a claim for active policies. Which one do you want to claim: " +
-          uniqueActive.join(", ") +
-          "?";
-      }
-    }
-
-    let submittedByBackend = false;
-    const hasPaidSubmission = Array.isArray(submissions)
-      ? submissions.some(
-          (s) =>
-            (s.status === "paid" || s.paymentStatus === "success") &&
-            s.workflowId === workflow?.workflow_id,
-        )
-      : false;
-
-    if (
-      workflow?.submit?.ready &&
-      workflow.submit.function &&
-      !hasPaidSubmission
-    ) {
-      // Respect workflow-level guardrail: require explicit user confirmation by default.
-      const requireConfirmation =
-        workflow.submit.require_user_confirmation !== false;
-      if (requireConfirmation) {
-        // Ask user to confirm submission instead of auto-submitting.
-        workflow.submit.confirmation_requested = true;
-        aiResponse.reply = aiResponse.reply
-          ? `${aiResponse.reply}\n\nYour application looks ready to submit. Reply 'yes submit' to confirm.`
-          : "Your application looks ready to submit. Reply 'yes submit' to confirm.";
-      } else {
-        // workflow explicitly allows auto submit
-        const payloadField = workflow.submit.payload_field || "data";
-        const fnPayload = {
-          user_id: userId,
-          workflow_id: workflow.workflow_id,
-          verification: workflow.verification || {},
-          [payloadField]: workflow.collected_fields,
-        };
-        const fnResult = await runFunctionByName(
-          workflow.submit.function,
-          fnPayload,
-        );
-        aiResponse.function_to_call = {
-          name: workflow.submit.function,
-          result: fnResult,
-        };
-        workflow.status = "submitted";
-        submittedByBackend = true;
-      }
-    }
-
-    if (
-      workflow &&
-      !submittedByBackend &&
-      workflow.status === "submitted" &&
-      !hasPaidSubmission &&
-      !workflow.submit?.confirmation_requested
-    ) {
-      const wfDef = workflow.submit?.function
-        ? workflow
-        : context.workflows?.find(
-            (w) => w?.data?.workflow_id === workflow.workflow_id,
-          )?.data;
-
-      if (wfDef?.submit?.function) {
-        const exists = await submissionExists({
-          userId,
-          workflowId: workflow.workflow_id,
-        });
-        if (!exists) {
-          const payloadField = wfDef.submit.payload_field || "data";
-          const fnPayload = {
-            user_id: userId,
-            workflow_id: workflow.workflow_id,
-            verification: workflow.verification || {},
-            [payloadField]: workflow.collected_fields,
-          };
-          const fnResult = await runFunctionByName(
-            wfDef.submit.function,
-            fnPayload,
-          );
-          aiResponse.function_to_call = {
-            name: wfDef.submit.function,
-            result: fnResult,
-          };
-          submittedByBackend = true;
-        }
-      }
-    }
-
-    if (workflow) {
-      await setUserState(userId, { workflow });
-      aiResponse.workflow = workflow;
-    }
-
-    // If the model suggested a backend function to call (function_to_call), execute it here.
-    // BUT only if we haven't already submitted something via the workflow blocks above.
-    if (
-      aiResponse.function_to_call &&
-      aiResponse.function_to_call.name &&
-      !aiResponse.function_to_call.result &&
-      !submittedByBackend
-    ) {
-      try {
-        const fnName = aiResponse.function_to_call.name;
-        const params =
-          aiResponse.function_to_call.parameters ||
-          aiResponse.function_to_call.params ||
-          {};
-        const fnResult = await runFunctionByName(fnName, params);
-        aiResponse.function_to_call = {
-          name: fnName,
-          parameters: params,
-          result: fnResult,
-        };
-        submittedByBackend = true;
-      } catch (err) {
-        aiResponse.function_to_call = {
-          ...aiResponse.function_to_call,
-          error: err?.message || String(err),
-        };
-      }
-    }
-
+    // 5. Post-process translation
     if (language && language !== "English" && aiResponse.reply) {
-      const originalReply = aiResponse.reply;
-      aiResponse.english_reply = originalReply; // Save the English version for future history
-      aiResponse.reply = await translateFromEnglish(originalReply, language);
-      console.log(`Translated response to [${language}]: "${aiResponse.reply}"`);
+      aiResponse.reply = await translateFromEnglish(aiResponse.english_reply, language);
     }
 
+    // 6. Audit
     writeAudit({
       at: new Date().toISOString(),
       userId,
-      message, // This is the original language message
-      english_message: processedMessage, // This is the English version
+      message,
+      english_message: processedMessage,
       aiResponse,
     });
 
+    // 7. Send Response
+    if (req.body.stream) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const charsPerChunk = 3;
+      for (let i = 0; i < aiResponse.reply.length; i += charsPerChunk) {
+        const chunk = aiResponse.reply.slice(i, i + charsPerChunk);
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        await new Promise(r => setTimeout(r, 20));
+      }
+
+      res.write(`data: ${JSON.stringify({ 
+        done: true, 
+        workflow: aiResponse.workflow, 
+        function_to_call: aiResponse.function_to_call 
+      })}\n\n`);
+      return res.end();
+    }
+
     res.json(aiResponse);
   } catch (err) {
+    console.error("Chat error:", err);
+    if (req.body.stream) {
+      res.write(`data: ${JSON.stringify({ error: err.message || String(err) })}\n\n`);
+      return res.end();
+    }
     res.status(500).json({ error: err.message || String(err) });
   }
 });
@@ -418,7 +162,6 @@ router.get("/history/:userId", async (req, res) => {
           entry.aiResponse.function_to_call.name
         ) {
           const fn = entry.aiResponse.function_to_call;
-          // create a user-friendly summary for known functions to avoid exposing raw JSON
           function summarizeFunction(fn) {
             const name = fn.name || "function";
             const res = fn.result || {};
@@ -444,7 +187,6 @@ router.get("/history/:userId", async (req, res) => {
                 ? `Request created (id: ${rid}). Admins will review and contact you.`
                 : `Request created. Admins will review and contact you.`;
             }
-            // generic safe summary
             if (res?.ok) return `${name} completed successfully.`;
             if (res?.error) return `${name} failed: ${res.error}`;
             return `${name} ran.`;
@@ -454,12 +196,10 @@ router.get("/history/:userId", async (req, res) => {
           messages.push({ who: "bot", text: summary, time: at });
         }
       } catch (e) {
-        // ignore parse errors per-line
         continue;
       }
     }
 
-    // sort by time
     messages.sort((a, b) => new Date(a.time) - new Date(b.time));
     res.json({ messages });
   } catch (err) {

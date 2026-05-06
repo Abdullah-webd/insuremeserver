@@ -42,3 +42,30 @@ export function buildPaymentSuccessEmail({ userName, premium }) {
 
   return { subject, text, html };
 }
+
+export function buildRejectionEmail({ userName, kind, reason }) {
+  const displayName = userName || "Customer";
+  const displayKind = kind || "submission";
+  const safeReason =
+    typeof reason === "string" && reason.trim()
+      ? reason.trim()
+      : "Your submission did not meet our review requirements at this time.";
+
+  const subject = `Your ${displayKind} has been rejected`;
+  const text =
+    `Hello ${displayName},\n\n` +
+    `Your ${displayKind} has been rejected.\n\n` +
+    `Reason: ${safeReason}\n\n` +
+    "You can submit a new one at any time.\n\n" +
+    "Thank you.";
+
+  const html = `
+    <p>Hello ${displayName},</p>
+    <p>Your <strong>${displayKind}</strong> has been rejected.</p>
+    <p><strong>Reason:</strong> ${safeReason}</p>
+    <p>You can submit a new one at any time.</p>
+    <p>Thank you.</p>
+  `;
+
+  return { subject, text, html };
+}

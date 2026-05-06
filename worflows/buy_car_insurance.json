@@ -1,4 +1,4 @@
-﻿{
+{
   "workflow_id": "buy_car_insurance",
   "name": "Car Insurance Registration",
   "description": "Collect car and owner details to register for car insurance.",
@@ -22,6 +22,34 @@
       "validation": { "min_length": 3 }
     },
     {
+      "id": "date_of_birth",
+      "field": "date_of_birth",
+      "type": "string",
+      "prompt": "What is your date of birth? (e.g., 1998-04-12)",
+      "required": true
+    },
+    {
+      "id": "gender",
+      "field": "gender",
+      "type": "string",
+      "prompt": "What is your gender?",
+      "required": false
+    },
+    {
+      "id": "address",
+      "field": "address",
+      "type": "string",
+      "prompt": "What is your home address?",
+      "required": true
+    },
+    {
+      "id": "occupation",
+      "field": "occupation",
+      "type": "string",
+      "prompt": "What is your occupation/job title?",
+      "required": true
+    },
+    {
       "id": "phone",
       "field": "phone",
       "type": "string",
@@ -37,26 +65,7 @@
       "required": true,
       "validation": { "format": "email" }
     },
-    {
-      "id": "bvn",
-      "field": "bvn",
-      "type": "string",
-      "prompt": "Please provide your BVN.",
-      "required": true,
-      "validation": { "format": "bvn" },
-      "verification_required": true,
-      "verification_action": "verify_bvn"
-    },
-    {
-      "id": "nin",
-      "field": "nin",
-      "type": "string",
-      "prompt": "Please provide your NIN.",
-      "required": true,
-      "validation": { "format": "nin" },
-      "verification_required": true,
-      "verification_action": "verify_nin"
-    },
+
     {
       "id": "car_make",
       "field": "car_make",
@@ -80,6 +89,62 @@
       "validation": { "format": "year" }
     },
     {
+      "id": "car_value",
+      "field": "car_value",
+      "type": "number",
+      "prompt": "What is the estimated value of the car in Naira?",
+      "required": true
+    },
+    {
+      "id": "vin",
+      "field": "vin",
+      "type": "string",
+      "prompt": "What is the Vehicle Identification Number (VIN)? If you don't know it, type \"I don't know\".",
+      "required": false
+    },
+    {
+      "id": "driver_license_number",
+      "field": "driver_license_number",
+      "type": "string",
+      "prompt": "What is your driver's license number?",
+      "required": true
+    },
+    {
+      "id": "driving_history",
+      "field": "driving_history",
+      "type": "string",
+      "prompt": "Briefly describe your driving history (any accidents/violations in the last 3 years)? If none, type \"none\".",
+      "required": true
+    },
+    {
+      "id": "vehicle_usage",
+      "field": "vehicle_usage",
+      "type": "string",
+      "prompt": "How do you use the car? (personal, business, ride-hailing)",
+      "required": true
+    },
+    {
+      "id": "vehicle_location",
+      "field": "vehicle_location",
+      "type": "string",
+      "prompt": "Where is the car mostly used/parked? (city/area)",
+      "required": true
+    },
+    {
+      "id": "ownership_age",
+      "field": "ownership_age",
+      "type": "number",
+      "prompt": "How many years have you owned this car?",
+      "required": true
+    },
+    {
+      "id": "condition",
+      "field": "condition",
+      "type": "string",
+      "prompt": "What is the condition of the car (Excellent, Good, Fair, Poor)?",
+      "required": true
+    },
+    {
       "id": "plate_number",
       "field": "plate_number",
       "type": "string",
@@ -99,10 +164,17 @@
       "verification_action": "verify_image_openai"
     },
     {
+      "id": "documents",
+      "field": "documents",
+      "type": "array",
+      "prompt": "Please upload any supporting documents (e.g., vehicle registration papers, driver’s license scan). You can upload images or PDFs.",
+      "required": false
+    },
+    {
       "id": "evidence",
       "field": "evidence",
       "type": "array",
-      "prompt": "Please upload supporting photos or videos.",
+      "prompt": "Please upload any additional evidence (photos/videos/documents).",
       "required": true,
       "validation": { "min_items": 1 }
     }
@@ -110,20 +182,29 @@
   "collected_fields": {
     "policy_understood": null,
     "full_name": null,
+    "date_of_birth": null,
+    "gender": null,
+    "address": null,
     "phone": null,
     "email": null,
-    "bvn": null,
-    "nin": null,
+    "occupation": null,
     "car_make": null,
     "car_model": null,
     "car_year": null,
+    "car_value": null,
+    "vin": null,
+    "driver_license_number": null,
+    "driving_history": null,
+    "vehicle_usage": null,
+    "vehicle_location": null,
+    "ownership_age": null,
+    "condition": null,
     "plate_number": null,
     "car_image": null,
+    "documents": [],
     "evidence": []
   },
   "verification": {
-    "bvn": { "required": true, "status": "pending", "provider": "format_only" },
-    "nin": { "required": true, "status": "pending", "provider": "format_only" },
     "plate_number": { "required": true, "status": "pending", "provider": "openai_vision" },
     "car_image": { "required": true, "status": "pending", "provider": "openai_vision" }
   },

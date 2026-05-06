@@ -86,7 +86,13 @@ async function uploadToCloudinary(fileUrl, { folder }) {
     // Choose the upload endpoint based on file type (use raw for PDFs).
     const fileUrlStr = String(fileUrl || "").toLowerCase();
     const useRaw =
-      fileUrlStr.endsWith(".pdf") || (args && args.forceRaw === true);
+      fileUrlStr.endsWith(".pdf") ||
+      fileUrlStr.endsWith(".doc") ||
+      fileUrlStr.endsWith(".docx") ||
+      fileUrlStr.startsWith("data:application/pdf") ||
+      fileUrlStr.startsWith("data:application/msword") ||
+      fileUrlStr.startsWith("data:application/vnd.openxmlformats-officedocument") ||
+      (args && args.forceRaw === true);
 
     // If we need raw (PDF) and the SDK is configured, prefer SDK upload (ensures resource_type=raw)
     if (useRaw) {
@@ -203,6 +209,14 @@ export async function ensureImagesStored(workflow) {
     });
   }
 
+  if (fields.documents) {
+    const urls = Array.isArray(fields.documents)
+      ? fields.documents
+      : [fields.documents];
+    const uploaded = await uploadList(urls, { folder: `${folder}/documents` });
+    fields.documents = uploaded.length === 1 ? uploaded[0] : uploaded;
+  }
+
   return workflow;
 }
 
@@ -225,6 +239,12 @@ export async function uploadImagesInData({ data, folder }) {
     data.evidence = await uploadList(data.evidence, {
       folder: `${folder}/claims`,
     });
+  }
+
+  if (data.documents) {
+    const urls = Array.isArray(data.documents) ? data.documents : [data.documents];
+    const uploaded = await uploadList(urls, { folder: `${folder}/documents` });
+    data.documents = uploaded.length === 1 ? uploaded[0] : uploaded;
   }
 
   return data;

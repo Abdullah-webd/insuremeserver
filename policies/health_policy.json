@@ -16,5 +16,5 @@
     "Provide medical reports when needed",
     "Report hospital visits promptly"
   ],
-  "admin_verification": ["BVN", "NIN", "Medical documents verification"]
+  "admin_verification": ["Medical documents verification"]
 }

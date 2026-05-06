@@ -35,7 +35,7 @@
 
   const extraChecks = [];
   extraChecks.push("Call the user to confirm key details and intent.");
-  extraChecks.push("Confirm BVN/NIN matches the user’s name on record.");
+  extraChecks.push("Confirm identity using name/phone/email and uploaded supporting documents (if any).");
 
   if (type === "car") {
     extraChecks.push("Confirm vehicle ownership and plate number with supporting docs.");

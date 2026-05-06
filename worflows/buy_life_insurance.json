@@ -1,4 +1,4 @@
-﻿{
+{
   "workflow_id": "buy_life_insurance",
   "name": "Life Insurance Registration",
   "description": "Collect personal and beneficiary details to register for life insurance.",
@@ -22,6 +22,20 @@
       "validation": { "min_length": 3 }
     },
     {
+      "id": "gender",
+      "field": "gender",
+      "type": "string",
+      "prompt": "What is your gender?",
+      "required": false
+    },
+    {
+      "id": "address",
+      "field": "address",
+      "type": "string",
+      "prompt": "What is your home address?",
+      "required": true
+    },
+    {
       "id": "phone",
       "field": "phone",
       "type": "string",
@@ -37,26 +51,7 @@
       "required": true,
       "validation": { "format": "email" }
     },
-    {
-      "id": "bvn",
-      "field": "bvn",
-      "type": "string",
-      "prompt": "Please provide your BVN.",
-      "required": true,
-      "validation": { "format": "bvn" },
-      "verification_required": true,
-      "verification_action": "verify_bvn"
-    },
-    {
-      "id": "nin",
-      "field": "nin",
-      "type": "string",
-      "prompt": "Please provide your NIN.",
-      "required": true,
-      "validation": { "format": "nin" },
-      "verification_required": true,
-      "verification_action": "verify_nin"
-    },
+
     {
       "id": "date_of_birth",
       "field": "date_of_birth",
@@ -71,6 +66,55 @@
       "type": "string",
       "prompt": "What is your occupation?",
       "required": true
+    },
+    {
+      "id": "income",
+      "field": "income",
+      "type": "string",
+      "prompt": "What is your monthly income range? (e.g., 100k-200k NGN). If you prefer, type 'prefer not to say'.",
+      "required": false
+    },
+    {
+      "id": "medical_history",
+      "field": "medical_history",
+      "type": "string",
+      "prompt": "Any medical history (past illnesses/surgeries)? If none, say 'None'.",
+      "required": false
+    },
+    {
+      "id": "current_health_condition",
+      "field": "current_health_condition",
+      "type": "string",
+      "prompt": "How would you describe your current health condition?",
+      "required": true
+    },
+    {
+      "id": "family_medical_history",
+      "field": "family_medical_history",
+      "type": "string",
+      "prompt": "Any family medical history (e.g., diabetes, heart disease)? If none, say 'None'.",
+      "required": false
+    },
+    {
+      "id": "smoking_alcohol_habits",
+      "field": "smoking_alcohol_habits",
+      "type": "string",
+      "prompt": "Do you smoke or drink alcohol? If no, say 'No'.",
+      "required": false
+    },
+    {
+      "id": "height_cm",
+      "field": "height_cm",
+      "type": "number",
+      "prompt": "What is your height in cm? (e.g., 175)",
+      "required": false
+    },
+    {
+      "id": "weight_kg",
+      "field": "weight_kg",
+      "type": "number",
+      "prompt": "What is your weight in kg? (e.g., 70)",
+      "required": false
     },
     {
       "id": "beneficiary_name",
@@ -95,10 +139,17 @@
       "validation": { "format": "phone_ng" }
     },
     {
+      "id": "documents",
+      "field": "documents",
+      "type": "array",
+      "prompt": "Please upload any supporting documents (e.g., ID card, medical report if any). You can upload images or PDFs.",
+      "required": false
+    },
+    {
       "id": "evidence",
       "field": "evidence",
       "type": "array",
-      "prompt": "Please upload supporting photos or videos.",
+      "prompt": "Please upload any additional evidence (photos/videos/documents).",
       "required": true,
       "validation": { "min_items": 1 }
     }
@@ -106,21 +157,26 @@
   "collected_fields": {
     "policy_understood": null,
     "full_name": null,
+    "gender": null,
+    "address": null,
     "phone": null,
     "email": null,
-    "bvn": null,
-    "nin": null,
     "date_of_birth": null,
     "occupation": null,
+    "income": null,
+    "medical_history": null,
+    "current_health_condition": null,
+    "family_medical_history": null,
+    "smoking_alcohol_habits": null,
+    "height_cm": null,
+    "weight_kg": null,
     "beneficiary_name": null,
     "beneficiary_relationship": null,
     "beneficiary_phone": null,
+    "documents": [],
     "evidence": []
   },
-  "verification": {
-    "bvn": { "required": true, "status": "pending", "provider": "format_only" },
-    "nin": { "required": true, "status": "pending", "provider": "format_only" }
-  },
+  "verification": {},
   "submit": {
     "ready": false,
     "function": "submit_life_insurance_application",

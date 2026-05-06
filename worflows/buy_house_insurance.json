@@ -1,4 +1,4 @@
-﻿{
+{
   "workflow_id": "buy_house_insurance",
   "name": "House Insurance Registration",
   "description": "Collect property and owner details to register for house insurance.",
@@ -22,6 +22,27 @@
       "validation": { "min_length": 3 }
     },
     {
+      "id": "date_of_birth",
+      "field": "date_of_birth",
+      "type": "string",
+      "prompt": "What is your date of birth? (e.g., 1998-04-12)",
+      "required": true
+    },
+    {
+      "id": "gender",
+      "field": "gender",
+      "type": "string",
+      "prompt": "What is your gender?",
+      "required": false
+    },
+    {
+      "id": "address",
+      "field": "address",
+      "type": "string",
+      "prompt": "What is your residential address?",
+      "required": true
+    },
+    {
       "id": "phone",
       "field": "phone",
       "type": "string",
@@ -38,25 +59,13 @@
       "validation": { "format": "email" }
     },
     {
-      "id": "bvn",
-      "field": "bvn",
+      "id": "occupation",
+      "field": "occupation",
       "type": "string",
-      "prompt": "Please provide your BVN.",
-      "required": true,
-      "validation": { "format": "bvn" },
-      "verification_required": true,
-      "verification_action": "verify_bvn"
+      "prompt": "What is your occupation/job title?",
+      "required": true
     },
-    {
-      "id": "nin",
-      "field": "nin",
-      "type": "string",
-      "prompt": "Please provide your NIN.",
-      "required": true,
-      "validation": { "format": "nin" },
-      "verification_required": true,
-      "verification_action": "verify_nin"
-    },
+
     {
       "id": "property_address",
       "field": "property_address",
@@ -80,6 +89,55 @@
       "validation": { "min": 1 }
     },
     {
+      "id": "property_year_built",
+      "field": "property_year_built",
+      "type": "string",
+      "prompt": "What year was the property built? (e.g., 2015) If unknown, type \"unknown\".",
+      "required": false
+    },
+    {
+      "id": "property_condition",
+      "field": "property_condition",
+      "type": "string",
+      "prompt": "What is the current condition of the building? (Excellent, Good, Fair, Poor)",
+      "required": true
+    },
+    {
+      "id": "security_features",
+      "field": "security_features",
+      "type": "string",
+      "prompt": "What security features does the property have? (e.g., gate, CCTV, guards) If none, type \"none\".",
+      "required": false
+    },
+    {
+      "id": "area_risks",
+      "field": "area_risks",
+      "type": "string",
+      "prompt": "Are there any known risks in the area (flood, fire, theft)? If none, type \"none\".",
+      "required": false
+    },
+    {
+      "id": "contents_value",
+      "field": "contents_value",
+      "type": "number",
+      "prompt": "Estimated value of contents inside (furniture/electronics) in NGN. If not sure, estimate.",
+      "required": false
+    },
+    {
+      "id": "ownership_age",
+      "field": "ownership_age",
+      "type": "number",
+      "prompt": "How many years have you owned this property?",
+      "required": true
+    },
+    {
+      "id": "condition",
+      "field": "condition",
+      "type": "string",
+      "prompt": "What is the condition of the property (Excellent, Good, Fair, Poor)?",
+      "required": true
+    },
+    {
       "id": "property_images",
       "field": "property_images",
       "type": "array",
@@ -90,10 +148,17 @@
       "verification_action": "verify_image_openai"
     },
     {
+      "id": "documents",
+      "field": "documents",
+      "type": "array",
+      "prompt": "Please upload any supporting documents (e.g., utility bill, deed/tenancy agreement). You can upload images or PDFs.",
+      "required": false
+    },
+    {
       "id": "evidence",
       "field": "evidence",
       "type": "array",
-      "prompt": "Please upload supporting photos or videos.",
+      "prompt": "Please upload any additional evidence (photos/videos/documents).",
       "required": true,
       "validation": { "min_items": 1 }
     }
@@ -101,19 +166,27 @@
   "collected_fields": {
     "policy_understood": null,
     "full_name": null,
+    "date_of_birth": null,
+    "gender": null,
+    "address": null,
     "phone": null,
     "email": null,
-    "bvn": null,
-    "nin": null,
+    "occupation": null,
     "property_address": null,
     "property_type": null,
     "property_value": null,
+    "property_year_built": null,
+    "property_condition": null,
+    "security_features": null,
+    "area_risks": null,
+    "contents_value": null,
+    "ownership_age": null,
+    "condition": null,
     "property_images": [],
+    "documents": [],
     "evidence": []
   },
   "verification": {
-    "bvn": { "required": true, "status": "pending", "provider": "format_only" },
-    "nin": { "required": true, "status": "pending", "provider": "format_only" },
     "property_images": { "required": true, "status": "pending", "provider": "openai_vision" }
   },
   "submit": {

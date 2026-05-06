@@ -1,4 +1,4 @@
-﻿import mongoose from "mongoose";
+import mongoose from "mongoose";
 
 const SubmissionSchema = new mongoose.Schema(
   {
@@ -15,7 +15,16 @@ const SubmissionSchema = new mongoose.Schema(
     paymentAuthUrl: { type: String, default: null },
     paymentAccessCode: { type: String, default: null },
     paymentVerifiedAt: { type: Date, default: null },
-    submittedAt: { type: Date, default: Date.now }
+    submittedAt: { type: Date, default: Date.now },
+    verifierId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    verificationStatus: { 
+      type: String, 
+      enum: ["pending", "verified", "suspicious", "info_needed"], 
+      default: "pending" 
+    },
+    verifierNotes: { type: String, default: "" },
+    rejectionReason: { type: String, default: "" },
+    rejectedAt: { type: Date, default: null }
   },
   { timestamps: true }
 );

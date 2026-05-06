@@ -1,4 +1,4 @@
-﻿import express from "express";
+import express from "express";
 import Submission from "../models/Submission.js";
 import User from "../models/User.js";
 import { isMongoConnected } from "../utils/db.js";

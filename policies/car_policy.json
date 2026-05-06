@@ -17,5 +17,5 @@
     "Provide recent photos of the car",
     "Report incidents within 24 hours"
   ],
-  "admin_verification": ["BVN", "NIN", "car details verification", "incident verification"]
+  "admin_verification": ["car details verification", "incident verification"]
 }

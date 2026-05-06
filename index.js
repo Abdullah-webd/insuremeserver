@@ -1,12 +1,15 @@
-﻿import "dotenv/config";
+import "dotenv/config";
 import express from "express";
 import swaggerUi from "swagger-ui-express";
 import cors from "cors";
 import chatRoutes from "./routes/chat.js";
 import adminRoutes from "./routes/admin.js";
 import userRoutes from "./routes/user.js";
+import authRoutes from "./routes/auth.js";
+import verifierRoutes from "./routes/verifier.js";
 import paystackWebhookRoutes from "./routes/payments.js";
 import { connectMongo } from "./utils/db.js";
+import { seedUsers } from "./utils/seeder.js";
 import openapiSpec from "./docs/openapi.js";
 
 const app = express();
@@ -58,11 +61,14 @@ app.get("/openapi.json", (req, res) => res.json(openapiSpec));
 app.use("/chat", chatRoutes);
 app.use("/admin", adminRoutes);
 app.use("/user", userRoutes);
+app.use("/auth", authRoutes);
+app.use("/verifier", verifierRoutes);
 
 const PORT = process.env.PORT || 3000;
 
 connectMongo()
-  .then(() => {
+  .then(async () => {
+    await seedUsers();
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
   })
   .catch((err) => {

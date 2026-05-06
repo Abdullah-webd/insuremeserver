@@ -1,75 +1,49 @@
-﻿import User from "../models/User.js";
+import User from "../models/User.js";
 import { isMongoConnected } from "./db.js";
+import fs from "fs";
+import path from "path";
 
-const userStore = new Map();
-
-export async function getUserState(userId) {
-  if (userStore.has(userId)) return userStore.get(userId);
-  if (isMongoConnected()) {
-    const doc = await User.findOne({ userId }).lean();
-    if (doc) {
-      userStore.set(userId, {
-        workflow: doc.workflow || null,
-        profile: doc.profile || {},
-      });
-      return userStore.get(userId);
-    }
-  }
-  return null;
-}
-
-export async function setUserState(userId, state) {
-  // merge with existing in-memory profile if present
-  const existing = userStore.get(userId) || {};
-  const merged = { ...existing, ...state };
-  userStore.set(userId, merged);
-  if (isMongoConnected()) {
-    await User.updateOne(
-      { userId },
-      {
-        $set: {
-          workflow: merged.workflow || null,
-          profile: merged.profile || {},
-        },
-      },
-      { upsert: true },
-    );
-  }
-}
-
-export async function clearUserState(userId) {
-  userStore.delete(userId);
-  if (isMongoConnected()) {
-    await User.deleteOne({ userId });
-  }
-}
+const ROOT = process.cwd();
+const USER_PROFILES_PATH = path.join(ROOT, "data", "user_profiles.jsonl");
 
 export async function getUserProfile(userId) {
-  const state = await getUserState(userId);
-  return state?.profile || {};
+  if (isMongoConnected()) {
+    const user = await User.findOne({ userId }).lean();
+    return user ? user.profile || {} : {};
+  }
+  
+  if (!fs.existsSync(USER_PROFILES_PATH)) return {};
+  const lines = fs.readFileSync(USER_PROFILES_PATH, "utf8").split("\n").filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const p = JSON.parse(lines[i]);
+    if (p.userId === userId) return p.profile || {};
+  }
+  return {};
 }
 
 export async function setUserProfile(userId, profile) {
-  const state = (await getUserState(userId)) || { workflow: null, profile: {} };
-  const merged = {
-    ...state,
-    profile: { ...(state.profile || {}), ...(profile || {}) },
-  };
-  userStore.set(userId, merged);
   if (isMongoConnected()) {
-    await User.updateOne(
-      { userId },
-      {
-        $set: {
-          profile: merged.profile || {},
-          workflow: merged.workflow || null,
-        },
-      },
-      { upsert: true },
-    );
+    const user = await User.findOne({ userId });
+    if (user) {
+      user.profile = { ...(user.profile || {}), ...profile };
+      await user.save();
+    } else {
+      await User.create({ userId, profile });
+    }
+    return;
   }
+  
+  const entry = { userId, profile, updatedAt: new Date().toISOString() };
+  fs.appendFileSync(USER_PROFILES_PATH, JSON.stringify(entry) + "\n", "utf8");
 }
 
 export async function setUserLanguage(userId, language) {
-  await setUserProfile(userId, { language });
+  const current = await getUserProfile(userId);
+  await setUserProfile(userId, { ...current, language });
+}
+
+export async function clearUserState(userId) {
+  // We no longer clear workflow state here since LangGraph manages it.
+  // This is kept as a no-op so routes/admin.js doesn't crash when calling it.
+  console.log(`clearUserState called for ${userId}. Workflow state is now managed by LangGraph checkpointer.`);
 }

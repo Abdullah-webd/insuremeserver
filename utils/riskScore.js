@@ -1,4 +1,4 @@
-﻿function clamp(n, min, max) {
+function clamp(n, min, max) {
   return Math.max(min, Math.min(max, n));
 }
 
@@ -34,24 +34,31 @@ function occupationRisk(value) {
 }
 
 export function scoreCar(data) {
-  let score = 40;
-  const year = parseYear(data.car_year);
-  if (year) {
-    const age = new Date().getFullYear() - year;
-    if (age >= 10) score += 15;
-    else if (age >= 5) score += 8;
-  }
-  return clamp(score, 0, 100);
+  const ownershipAge = Number(data.ownership_age || 0);
+  const condition = String(data.condition || "").toLowerCase();
+  
+  let conditionMultiplier = 20; // Default
+  if (condition.includes("poor")) conditionMultiplier = 40;
+  else if (condition.includes("fair")) conditionMultiplier = 25;
+  else if (condition.includes("good")) conditionMultiplier = 15;
+  else if (condition.includes("excellent")) conditionMultiplier = 5;
+
+  const score = (ownershipAge * 0.1) + conditionMultiplier;
+  return clamp(score, 1, 100);
 }
 
 export function scoreHouse(data) {
-  let score = 35;
-  const value = Number(data.property_value);
-  if (Number.isFinite(value)) {
-    if (value >= 50000000) score += 10;
-    else if (value >= 20000000) score += 5;
-  }
-  return clamp(score, 0, 100);
+  const ownershipAge = Number(data.ownership_age || 0);
+  const condition = String(data.condition || "").toLowerCase();
+  
+  let conditionMultiplier = 15; // Default
+  if (condition.includes("poor")) conditionMultiplier = 35;
+  else if (condition.includes("fair")) conditionMultiplier = 20;
+  else if (condition.includes("good")) conditionMultiplier = 10;
+  else if (condition.includes("excellent")) conditionMultiplier = 0;
+
+  const score = (ownershipAge * 0.05) + conditionMultiplier;
+  return clamp(score, 1, 100);
 }
 
 export function scoreHealth(data) {

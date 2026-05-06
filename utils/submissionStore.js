@@ -1,4 +1,4 @@
-﻿import { isMongoConnected } from "./db.js";
+import { isMongoConnected } from "./db.js";
 import Submission from "../models/Submission.js";
 import fs from "fs";
 import path from "path";
