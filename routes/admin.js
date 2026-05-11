@@ -445,12 +445,20 @@ router.post("/submissions/:id/approve", async (req, res) => {
   await submission.save();
 
   const emailContent = buildApprovalEmail({
-    userName: user?.profile?.full_name || submission.data?.full_name,
+    userName: user?.profile?.full_name || submission.data?.full_name || "Valued Customer",
     premium: premium,
     currency: premium?.currency || "NGN",
     payUrl: authUrl,
   });
-  await sendEmail({ to: email, ...emailContent });
+  
+  try {
+    console.log(`[Admin] Sending approval email to ${email} for submission ${submission._id}`);
+    await sendEmail({ to: email, ...emailContent });
+    console.log(`[Admin] Approval email sent successfully to ${email}`);
+  } catch (emailErr) {
+    console.error(`[Admin] Failed to send approval email to ${email}:`, emailErr.message || emailErr);
+    // We don't fail the whole request if the email fails, but we log it clearly.
+  }
 
   res.json({
     ok: true,
@@ -495,14 +503,22 @@ router.post("/submissions/:id/reject", async (req, res) => {
           : "application";
 
       const emailContent = buildRejectionEmail({
-        userName: user?.profile?.full_name || submission.data?.full_name,
+        userName: user?.profile?.full_name || submission.data?.full_name || "Valued Customer",
         kind,
         reason,
       });
-      await sendEmail({ to: email, ...emailContent });
-      emailSent = true;
+
+      try {
+        console.log(`[Admin] Sending rejection email to ${email} for submission ${submission._id}`);
+        await sendEmail({ to: email, ...emailContent });
+        console.log(`[Admin] Rejection email sent successfully to ${email}`);
+        emailSent = true;
+      } catch (emailErr) {
+        console.error(`[Admin] Failed to send rejection email to ${email}:`, emailErr.message || emailErr);
+        // We don't fail the whole request if the email fails, but we log it clearly.
+      }
     } catch (err) {
-      console.error("Reject email failed:", err?.message || err);
+      console.error("General rejection email error:", err?.message || err);
     }
   }
 

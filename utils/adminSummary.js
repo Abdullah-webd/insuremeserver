@@ -1,4 +1,4 @@
-﻿export function buildAdminSummary({ type, data, verification }) {
+export function buildAdminSummary({ type, data, verification }) {
   const userName = data?.full_name || "Unknown";
   const phone = data?.phone || "Unknown";
 
@@ -64,7 +64,8 @@
       ? convoSignals
       : ["User provided required details for submission."],
     extra_verification: extraChecks,
-    verification_results: verificationSummary
+    verification_results: verificationSummary,
+    all_data: data // Pass through ALL data for the detail view
   };
 
   return admin_notes;

@@ -1,4 +1,4 @@
-﻿{
+{
   "workflow_id": "file_claim",
   "name": "File Claim",
   "description": "Collect claim details for review by the admin team.",
@@ -9,9 +9,8 @@
       "id": "policy_type",
       "field": "policy_type",
       "type": "string",
-      "prompt": "Which policy are you filing a claim for? (car, house, health, life)",
-      "required": true,
-      "validation": { "enum": ["car", "house", "health", "life"] }
+      "prompt": "Which policy are you filing a claim for?",
+      "required": true
     },
     {
       "id": "incident_date",
@@ -33,7 +32,7 @@
       "id": "evidence",
       "field": "evidence",
       "type": "array",
-      "prompt": "Please upload supporting evidence (photos, reports, receipts).",
+      "prompt": "Please upload NEW photos of the damage or incident (e.g., photos of the damaged property).",
       "required": true,
       "validation": { "min_items": 1 }
     }

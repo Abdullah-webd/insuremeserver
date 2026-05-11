@@ -43,11 +43,6 @@ export const INSURANCE_PRESETS = [
       { key: "property_address", label: "Property Address" },
       { key: "property_type", label: "Property Type" },
       { key: "property_value", label: "Property Value" },
-      { key: "property_year_built", label: "Year Built" },
-      { key: "property_condition", label: "Property Condition" },
-      { key: "security_features", label: "Security Features" },
-      { key: "area_risks", label: "Area Risks" },
-      { key: "contents_value", label: "Contents Value (NGN)" },
       { key: "property_images", label: "Property Images", media: true },
       { key: "documents", label: "Documents", media: true },
       { key: "evidence", label: "Evidence", media: true }

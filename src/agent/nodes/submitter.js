@@ -19,9 +19,12 @@ export async function submitterNode(state) {
     });
 
     if (missingFields.length > 0) {
+        console.log(`[Submitter] Skipping submission for workflow ${workflow_id}. Missing fields: ${missingFields.map(f => f.field).join(", ")}`);
         // Not ready to submit
         return {};
     }
+
+    console.log(`[Submitter] All fields collected for workflow ${workflow_id}. Triggering submission...`);
 
     // Ready to submit
     if (workflowDef.submit && workflowDef.submit.function) {
@@ -36,11 +39,23 @@ export async function submitterNode(state) {
         // to simplify the flow and reduce friction.
 
         const payloadField = workflowDef.submit.payload_field || "data";
+        
+        // Final sanity check/smart population for dashboard visibility
+        const finalData = { ...collected_fields };
+        const allPossibleFields = workflowDef.steps.map(s => s.field);
+        
+        // Ensure all possible fields exist in finalData to avoid "-" on dashboard
+        allPossibleFields.forEach(field => {
+            if (finalData[field] === undefined || finalData[field] === null || finalData[field] === "") {
+                finalData[field] = "-";
+            }
+        });
+
         const fnPayload = {
             user_id: userId,
             workflow_id: workflow_id,
             verification: verification_results || {},
-            [payloadField]: collected_fields
+            [payloadField]: finalData
         };
 
         try {

@@ -25,12 +25,21 @@ ${JSON.stringify(allFields, null, 2)}
 Currently collected data:
 ${JSON.stringify(collected_fields, null, 2)}
 
-Your job is to read the recent conversation and extract any NEWLY provided information that matches the fields above.
+User's Active Policies:
+${JSON.stringify(state.active_policies || [], null, 2)}
+
+Your job is to read the recent conversation and extract any NEWLY provided information.
 - Pay special attention to uploaded files. Treat any URL provided as a potential document or image.
-- For array fields like 'property_images' or 'evidence', DO NOT overwrite existing data; ONLY output the newly provided items as an array. The system will merge them automatically.
+- For array fields like 'property_images' or 'evidence', DO NOT overwrite existing data; ONLY output the newly provided items as an array.
 - If the user explicitly asks to cancel or stop the process, output {"cancel": true}.
 
-Output a JSON object with the new fields you extracted. ONLY output JSON. No markdown formatting.`;
+SMART DEDUCTIONS:
+- If you can deduce missing fields from the conversation or previous context, do so! 
+- CLAIM SPECIAL: If the user is filing a claim (file_claim) and they ONLY HAVE ONE active policy, automatically set "policy_type" to that policy.
+- NEVER reuse old photos for a claim.
+- For Pidgin/Non-English: Focus strictly on the DATA being shared. Do not get distracted by the language style.
+
+Output a JSON object with the fields you extracted or deduced. ONLY output JSON. No markdown formatting.`;
 
     const response = await llm.invoke([
         new SystemMessage(systemPrompt),
