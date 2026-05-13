@@ -11,7 +11,7 @@ export async function extractorNode(state) {
     if (!workflow) return {};
 
     const llm = new ChatOpenAI({ 
-        modelName: process.env.OPENAI_MODEL || "gpt-5", 
+        modelName: process.env.OPENAI_FAST_MODEL || "gpt-4o-mini", 
         apiKey: process.env.OPENAI_API_KEY
     });
 

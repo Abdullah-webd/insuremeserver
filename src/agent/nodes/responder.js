@@ -28,6 +28,11 @@ CLAIM SPECIFIC RULES:
 - If the workflow is "file_claim":
     - Check the user's "active_policies". If they ONLY HAVE ONE active policy (e.g., just "house"), do NOT ask them "Which policy are you filing a claim for?". Automatically assume it's for that active policy and move to the next step.
     - ALWAYS ask for NEW photos of the damage. NEVER reuse or mention photos from the registration/buying stage. A claim requires photos of the CURRENT damage.
+
+POLICY LINK RULES:
+- When providing a policy link (LINK: /policy/...), ALWAYS ensure there is a space BEFORE and AFTER the entire "LINK: /..." command.
+- NEVER wrap the policy link in parentheses, e.g., do NOT do (LINK: /policy/car).
+- The "LINK: /..." command must be on its own line if possible, or clearly separated from text.
 `;
 
     if (ai_function_call && ai_function_call.result) {
@@ -56,8 +61,11 @@ Politely inform the user about the specific errors and ask them to provide the c
 We still need the following fields:
 ${JSON.stringify(missingFields.map(f => ({ prompt: f.prompt })), null, 2)}
 
-Please ask the user for ALL of the missing information in a single clear, friendly message. Do not ask one by one. List them out nicely.
-Do not ask for information we already have.`;
+CRITICAL DIRECTIVES:
+1. You MUST ask for ALL missing information in a SINGLE message. NEVER ask for them one by one.
+2. If the "policy_understood" field is missing, you MUST include the policy link (LINK: /policy/...) at the very beginning of your response.
+3. Use a clear, bulleted list for the information you need.
+4. DO NOT skip any required fields.`;
         } else {
              systemPrompt += `\nWORKFLOW READY: All required fields have been collected. Please review their inputs and ask if they are ready to submit, or if they need to change anything.`;
         }
@@ -71,6 +79,7 @@ CRITICAL RULES:
 - NEVER offer or mention "quotes" or "get a quote". We do not do quotes. You just help them buy policies.
 - NEVER offer to "register an account". The AI cannot register accounts for users. Do not mention registration.
 - NEVER make up capabilities. If the user asks for something outside of buying insurance or filing a claim, politely explain that you can only help with insurance applications and claims.
+- NEVER ask for specific details (like address, name, or vehicle info) in this General Chat state. If the user wants to buy insurance, simply acknowledge it and wait for the workflow to be activated by the system.
 
 Available workflows you can start: ${context.workflows.map(w => w.data.workflow_id).filter(w => w !== 'registration').join(", ")}.
 

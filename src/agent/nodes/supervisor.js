@@ -15,7 +15,10 @@ export async function supervisorNode(state) {
 Your job is to read the conversation history and determine if the user wants to start a specific insurance workflow or just chat.
 
 Available workflows:
-${context.workflows.map(w => `- ${w.data.workflow_id}: ${w.data.description}`).filter(w => !w.includes('registration')).join('\n')}
+${context.workflows
+    .filter(w => w.data && w.data.workflow_id && w.data.description && w.data.workflow_id !== 'registration')
+    .map(w => `- ${w.data.workflow_id}: ${w.data.description}`)
+    .join('\n')}
 
 Active policies the user has: ${active_policies.join(", ") || "None"}
 Previous submissions:

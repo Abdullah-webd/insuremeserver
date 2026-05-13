@@ -40,9 +40,7 @@ router.post("/", async (req, res) => {
     // 3. Prepare Graph Invocation
     const graph = await getGraph();
     const config = { configurable: { thread_id: userId } };
-    
-    // We send the new user message to the graph
-    const result = await graph.invoke({
+    const input = {
         messages: [new HumanMessage(processedMessage)],
         userId,
         language,
@@ -56,15 +54,78 @@ router.post("/", async (req, res) => {
             rejectionReason: s.rejectionReason || "",
             rejectedAt: s.rejectedAt || null,
         }))
-    }, config);
+    };
 
-    // 4. Extract results
+    if (req.body.stream) {
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const eventStream = await graph.stream(input, { ...config, streamMode: "updates" });
+      
+      let finalState = input;
+      const statusMap = {
+          supervisor: "🧠 Routing your request...",
+          extractor: "🔍 Extracting details from message...",
+          validator: "✅ Validating and verifying data...",
+          submitter: "🚀 Finalizing application submission...",
+          responder: "✍️ Preparing personalized reply..."
+      };
+
+      for await (const update of eventStream) {
+          const nodeName = Object.keys(update)[0];
+          finalState = { ...finalState, ...update[nodeName] };
+          
+          if (statusMap[nodeName]) {
+              res.write(`data: ${JSON.stringify({ status: statusMap[nodeName] })}\n\n`);
+          }
+      }
+
+      // 4. Extract results from final state
+      const lastMessage = finalState.messages[finalState.messages.length - 1];
+      let replyText = lastMessage?.content || "I'm sorry, I couldn't process that.";
+      const workflowId = finalState.workflow_id === "__CLEAR__" ? null : finalState.workflow_id;
+      const collectedFields = finalState.collected_fields === "__CLEAR__" ? {} : (finalState.collected_fields || {});
+      
+      const aiResponse = {
+          reply: replyText,
+          english_reply: replyText,
+          workflow: workflowId ? {
+              workflow_id: workflowId,
+              collected_fields: collectedFields,
+              status: "in_progress"
+          } : null,
+          function_to_call: finalState.ai_function_call === "__CLEAR__" ? null : finalState.ai_function_call
+      };
+
+      // Handle translation if needed
+      if (language && language !== "English" && aiResponse.reply) {
+        aiResponse.reply = await translateFromEnglish(aiResponse.english_reply, language);
+      }
+
+      // Stream the actual text
+      const charsPerChunk = 5;
+      for (let i = 0; i < aiResponse.reply.length; i += charsPerChunk) {
+        const chunk = aiResponse.reply.slice(i, i + charsPerChunk);
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        await new Promise(r => setTimeout(r, 15));
+      }
+
+      res.write(`data: ${JSON.stringify({ 
+        done: true, 
+        workflow: aiResponse.workflow, 
+        function_to_call: aiResponse.function_to_call 
+      })}\n\n`);
+      return res.end();
+    }
+
+    // Non-streaming fallback
+    const result = await graph.invoke(input, config);
     const lastMessage = result.messages[result.messages.length - 1];
     let replyText = lastMessage?.content || "I'm sorry, I couldn't process that.";
     const workflowId = result.workflow_id === "__CLEAR__" ? null : result.workflow_id;
     const collectedFields = result.collected_fields === "__CLEAR__" ? {} : (result.collected_fields || {});
     
-    // Convert to old aiResponse format for frontend compatibility
     const aiResponse = {
         reply: replyText,
         english_reply: replyText,
@@ -76,39 +137,8 @@ router.post("/", async (req, res) => {
         function_to_call: result.ai_function_call === "__CLEAR__" ? null : result.ai_function_call
     };
 
-    // 5. Post-process translation
     if (language && language !== "English" && aiResponse.reply) {
       aiResponse.reply = await translateFromEnglish(aiResponse.english_reply, language);
-    }
-
-    // 6. Audit
-    writeAudit({
-      at: new Date().toISOString(),
-      userId,
-      message,
-      english_message: processedMessage,
-      aiResponse,
-    });
-
-    // 7. Send Response
-    if (req.body.stream) {
-      res.setHeader("Content-Type", "text/event-stream");
-      res.setHeader("Cache-Control", "no-cache");
-      res.setHeader("Connection", "keep-alive");
-
-      const charsPerChunk = 3;
-      for (let i = 0; i < aiResponse.reply.length; i += charsPerChunk) {
-        const chunk = aiResponse.reply.slice(i, i + charsPerChunk);
-        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
-        await new Promise(r => setTimeout(r, 20));
-      }
-
-      res.write(`data: ${JSON.stringify({ 
-        done: true, 
-        workflow: aiResponse.workflow, 
-        function_to_call: aiResponse.function_to_call 
-      })}\n\n`);
-      return res.end();
     }
 
     res.json(aiResponse);

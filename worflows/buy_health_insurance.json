@@ -10,7 +10,7 @@
       "id": "policy_ack",
       "field": "policy_understood",
       "type": "boolean",
-      "prompt": "Do you understand and accept the Health Insurance policy terms?",
+      "prompt": "Do you understand and accept the Health Insurance policy terms?\n\nLINK: /policy/health",
       "required": true
     },
     {
@@ -26,7 +26,7 @@
       "field": "gender",
       "type": "string",
       "prompt": "What is your gender?",
-      "required": false
+      "required": true
     },
     {
       "id": "address",
@@ -86,28 +86,28 @@
       "field": "hospital_visits",
       "type": "string",
       "prompt": "Any previous hospital visits/admissions in the last 12 months? If none, say 'None'.",
-      "required": false
+      "required": true
     },
     {
       "id": "medications",
       "field": "medications",
       "type": "string",
       "prompt": "Are you currently taking any medications? If none, say 'None'.",
-      "required": false
+      "required": true
     },
     {
       "id": "lifestyle_habits",
       "field": "lifestyle_habits",
       "type": "string",
       "prompt": "Lifestyle habits (smoking/drinking/exercise). If none, say 'None'.",
-      "required": false
+      "required": true
     },
     {
       "id": "preferred_hospital",
       "field": "preferred_hospital",
       "type": "string",
       "prompt": "Do you have a preferred hospital/doctor? If yes, tell us. If no, say 'No preference'.",
-      "required": false
+      "required": true
     },
     {
       "id": "next_of_kin",
@@ -129,14 +129,14 @@
       "field": "documents",
       "type": "array",
       "prompt": "Please upload any supporting medical documents (if any). You can upload images or PDFs.",
-      "required": false
+      "required": true
     },
     {
       "id": "evidence",
       "field": "evidence",
       "type": "array",
       "prompt": "Please upload any additional evidence (photos/videos/documents).",
-      "required": false
+      "required": true
     }
   ],
   "collected_fields": {

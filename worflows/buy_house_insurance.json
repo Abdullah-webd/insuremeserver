@@ -10,7 +10,7 @@
       "id": "policy_ack",
       "field": "policy_understood",
       "type": "boolean",
-      "prompt": "Do you understand and accept the House Insurance policy terms?",
+      "prompt": "Do you understand and accept the House Insurance policy terms?\n\nLINK: /policy/house",
       "required": true
     },
     {
@@ -110,14 +110,14 @@
       "field": "documents",
       "type": "array",
       "prompt": "Please upload any supporting documents (e.g., utility bill, deed/tenancy agreement). You can upload images or PDFs.",
-      "required": false
+      "required": true
     },
     {
       "id": "evidence",
       "field": "evidence",
       "type": "array",
       "prompt": "Please upload any additional evidence (photos/videos/documents).",
-      "required": false
+      "required": true
     }
   ],
   "collected_fields": {
