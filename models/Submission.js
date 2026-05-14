@@ -10,6 +10,7 @@ const SubmissionSchema = new mongoose.Schema(
     riskScoreFinal: { type: Number, default: null },
     premiumFinal: { type: mongoose.Schema.Types.Mixed, default: null },
     adminNotes: { type: mongoose.Schema.Types.Mixed, default: null },
+    riskRationale: { type: String, default: "" },
     paymentStatus: { type: String, default: "pending" },
     paymentReference: { type: String, default: null },
     paymentAuthUrl: { type: String, default: null },

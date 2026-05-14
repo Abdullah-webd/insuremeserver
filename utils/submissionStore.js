@@ -20,6 +20,7 @@ export async function appendSubmission(entry) {
       workflowId: entry.workflow_id || null,
       status: entry.status || "submitted",
       riskScoreFinal: entry.risk_score || entry.riskScoreFinal || null,
+      riskRationale: entry.risk_rationale || entry.riskRationale || "",
       premiumFinal: entry.premium_estimate || entry.premiumFinal || null,
       adminNotes: entry.admin_notes || entry.adminNotes || null,
       paymentStatus: entry.payment_status || "pending",

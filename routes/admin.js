@@ -311,6 +311,8 @@ router.patch("/users/:userId/profile", async (req, res) => {
     ]);
     if (meta.riskScoreFinal !== undefined)
       submission.riskScoreFinal = meta.riskScoreFinal;
+    if (meta.riskRationale !== undefined)
+      submission.riskRationale = meta.riskRationale;
     if (meta.premiumFinal !== undefined)
       submission.premiumFinal = meta.premiumFinal;
     if (meta.adminNotes !== undefined) submission.adminNotes = meta.adminNotes;

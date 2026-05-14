@@ -17,14 +17,24 @@ export function normalizeSubmissionData(data) {
 
 export function buildAdminPackage({ type, data, verification }) {
   const normalizedData = normalizeSubmissionData(data);
-  const risk_score = scoreByType(type, normalizedData);
-  const premium = estimatePremium({ type, riskScore: risk_score, data: normalizedData });
+  
+  // New: scoreByType and estimatePremium now return rationales
+  const { score: risk_score, rationale: riskRationale } = scoreByType(type, normalizedData);
+  const premiumResult = estimatePremium({ type, riskScore: risk_score, data: normalizedData });
+  
   const admin_notes = buildNotes({ type, data: normalizedData, verification });
+
+  // Combine rationales
+  const combinedRationale = `${riskRationale}\n\n${premiumResult.rationale}`;
 
   return {
     risk_score,
-    premium_estimate: premium,
+    premium_estimate: {
+      amount: premiumResult.amount,
+      currency: premiumResult.currency,
+      period: premiumResult.period
+    },
+    risk_rationale: combinedRationale,
     admin_notes
   };
 }
-
