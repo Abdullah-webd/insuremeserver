@@ -11,7 +11,7 @@ export async function extractorNode(state) {
     if (!workflow) return {};
 
     const llm = new ChatOpenAI({ 
-        modelName: process.env.OPENAI_FAST_MODEL || "gpt-4o-mini", 
+        modelName: process.env.OPENAI_FAST_MODEL || "gpt-5", 
         apiKey: process.env.OPENAI_API_KEY
     });
 
@@ -36,6 +36,7 @@ Your job is to read the recent conversation and extract any NEWLY provided infor
 SMART DEDUCTIONS:
 - If you can deduce missing fields from the conversation or previous context, do so! 
 - CLAIM SPECIAL: If the user is filing a claim (file_claim) and they ONLY HAVE ONE active policy, automatically set "policy_type" to that policy.
+- COMPLETION SPECIAL: If the user explicitly says they have uploaded everything or are done, and some auxiliary/array fields (like 'documents' or 'evidence') are still missing, you can copy URLs from other fields or mark them as "DONE" if the user insists they have no more.
 - NEVER reuse old photos for a claim.
 - For Pidgin/Non-English: Focus strictly on the DATA being shared. Do not get distracted by the language style.
 

@@ -35,7 +35,7 @@ export async function callAI(payload, customModel = null) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-  const model = customModel || process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = customModel || process.env.OPENAI_MODEL || "gpt-5";
 
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -70,7 +70,7 @@ export async function callAIMessage({ systemPrompt, userMessage, model: customMo
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("OPENAI_API_KEY is not set");
 
-  const model = customModel || process.env.OPENAI_MODEL || "gpt-4.1-mini";
+  const model = customModel || process.env.OPENAI_MODEL || "gpt-5";
 
   const res = await fetch("https://api.openai.com/v1/responses", {
     method: "POST",

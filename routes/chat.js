@@ -61,23 +61,29 @@ router.post("/", async (req, res) => {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      res.write(`data: ${JSON.stringify({ status: "🚀 Initializing InsureMe AI agent..." })}\n\n`);
+
       const eventStream = await graph.stream(input, { ...config, streamMode: "updates" });
       
       let finalState = input;
-      const statusMap = {
-          supervisor: "🧠 Routing your request...",
-          extractor: "🔍 Extracting details from message...",
-          validator: "✅ Validating and verifying data...",
-          submitter: "🚀 Finalizing application submission...",
-          responder: "✍️ Preparing personalized reply..."
+      const statusHandlers = {
+          supervisor: (u) => u.workflow_id ? "🎯 Routing to registration workflow..." : "🧠 Understanding your request...",
+          extractor: (u) => u.collected_fields ? "🔍 Updating your application details..." : "🔍 Checking for new information...",
+          validator: () => "✅ Verifying and validating data...",
+          submitter: (u) => (u.ai_function_call && u.ai_function_call !== "__CLEAR__") ? "🚀 Finalizing your submission..." : null,
+          responder: () => "✍️ Preparing personalized reply..."
       };
 
       for await (const update of eventStream) {
           const nodeName = Object.keys(update)[0];
-          finalState = { ...finalState, ...update[nodeName] };
+          const nodeUpdate = update[nodeName];
+          finalState = { ...finalState, ...nodeUpdate };
           
-          if (statusMap[nodeName]) {
-              res.write(`data: ${JSON.stringify({ status: statusMap[nodeName] })}\n\n`);
+          if (statusHandlers[nodeName]) {
+              const status = statusHandlers[nodeName](nodeUpdate);
+              if (status) {
+                  res.write(`data: ${JSON.stringify({ status })}\n\n`);
+              }
           }
       }
 

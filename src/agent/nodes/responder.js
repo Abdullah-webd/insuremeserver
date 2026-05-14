@@ -9,7 +9,7 @@ export async function responderNode(state) {
     const workflow = workflow_id ? context.workflows.find(w => w.data.workflow_id === workflow_id)?.data : null;
 
     const llm = new ChatOpenAI({ 
-        modelName: process.env.OPENAI_MODEL || "gpt-4", 
+        modelName: process.env.OPENAI_MODEL || "gpt-5", 
         apiKey: process.env.OPENAI_API_KEY
     });
 
@@ -33,6 +33,14 @@ POLICY LINK RULES:
 - When providing a policy link (LINK: /policy/...), ALWAYS ensure there is a space BEFORE and AFTER the entire "LINK: /..." command.
 - NEVER wrap the policy link in parentheses, e.g., do NOT do (LINK: /policy/car).
 - The "LINK: /..." command must be on its own line if possible, or clearly separated from text.
+
+ANTI-HALLUCINATION RULES:
+1. NEVER claim a submission was successful unless you see the "SUCCESS: The application was just successfully submitted!" block in this prompt.
+2. If you see "WORKFLOW ACTIVE" and there are "missingFields", you MUST ask for them. DO NOT assume the user is done unless the state says so.
+3. If the user asks "have you submitted it?" and the "SUCCESS" block is NOT present, you must explain that you are still waiting for information or that they need to confirm they are ready.
+
+LANGUAGE RULES:
+- Respond in the SAME language the user is using. If they speak English, respond in English. If they speak Pidgin, respond in Pidgin.
 `;
 
     if (ai_function_call && ai_function_call.result) {
